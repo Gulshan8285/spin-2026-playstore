@@ -21,9 +21,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -31,7 +33,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,9 +50,8 @@ import com.spinwin.rewards.components.GlassTextField
 import com.spinwin.rewards.components.PrimaryButton
 import com.spinwin.rewards.theme.BorderGlass
 import com.spinwin.rewards.theme.CoralRed
-import com.spinwin.rewards.theme.Gold
+import com.spinwin.rewards.theme.Emerald
 import com.spinwin.rewards.theme.InterFamily
-import com.spinwin.rewards.theme.NeonPurple
 import com.spinwin.rewards.theme.PrimaryGradient
 import com.spinwin.rewards.theme.SoraFamily
 import com.spinwin.rewards.theme.TextPrimary
@@ -79,12 +79,12 @@ fun AuthScreen(
     }
     val googleSignInClient = remember { GoogleSignIn.getClient(context, gso) }
 
-    var showCompleteProfileDialog by remember { mutableStateOf(false) }
-    var pendingName by remember { mutableStateOf("") }
-    var pendingEmail by remember { mutableStateOf("") }
-    var pendingPhotoUrl by remember { mutableStateOf("") }
-    var pendingPhone by remember { mutableStateOf("") }
-    var pendingAge by remember { mutableStateOf("") }
+    var inputName by remember { mutableStateOf("") }
+    var inputEmail by remember { mutableStateOf("") }
+    var inputPhotoUrl by remember { mutableStateOf("") }
+    var inputPhone by remember { mutableStateOf("") }
+    var inputAge by remember { mutableStateOf("21") }
+    var googleConnectedEmail by remember { mutableStateOf<String?>(null) }
 
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -96,20 +96,20 @@ fun AuthScreen(
                 val realName = account.displayName ?: ""
                 val realEmail = account.email ?: ""
                 val photoUrl = account.photoUrl?.toString() ?: ""
-                pendingName = realName
-                pendingEmail = realEmail
-                pendingPhotoUrl = photoUrl
-                pendingPhone = ""
-                showCompleteProfileDialog = true
+                inputName = realName
+                inputEmail = realEmail
+                inputPhotoUrl = photoUrl
+                googleConnectedEmail = realEmail
+                Toast.makeText(context, "Google connected! Now enter your phone number & age.", Toast.LENGTH_LONG).show()
             } else {
-                Toast.makeText(context, "Sign-in cancelled", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Sign-in cancelled. Please fill details below.", Toast.LENGTH_SHORT).show()
             }
         } catch (e: ApiException) {
-            if (e.statusCode != 12501) {
-                Toast.makeText(context, "Google Sign-In error (Code ${e.statusCode})", Toast.LENGTH_SHORT).show()
-            }
+            // If Google Sign-In throws an error (e.g. SHA-1 mismatch or network on friend's device),
+            // gracefully prompt the user to use the direct input form right below.
+            Toast.makeText(context, "Please enter your Name & Phone below to continue.", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(context, "Sign-in error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Please fill your details below to register.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -117,96 +117,81 @@ fun AuthScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Spacer(modifier = Modifier.height(10.dp))
+
             // App Emblem / Logo
             Box(
                 modifier = Modifier
-                    .size(80.dp)
+                    .size(72.dp)
                     .clip(CircleShape)
                     .background(PrimaryGradient),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "👑", fontSize = 42.sp)
+                Text(text = "👑", fontSize = 38.sp)
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Text(
                 text = "SpinWin Rewards",
                 color = TextPrimary,
                 fontFamily = SoraFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 32.sp
+                fontSize = 28.sp
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Turn Daily Spins & Trivia Into Real Cash & Rewards",
+                text = "Play Daily Spins, Quizzes & Earn Instant UPI Cash",
                 color = TextSecondary,
                 fontFamily = InterFamily,
-                fontSize = 14.sp
+                fontSize = 13.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(36.dp))
+            Spacer(modifier = Modifier.height(22.dp))
 
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(22.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Instant Account Access",
+                        text = "User Registration & Sign In",
                         color = TextPrimary,
                         fontFamily = SoraFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Sign in securely with your Google account to start earning instant cash and spinning the wheel:",
+                        text = "Create your verified profile to start playing with 0 points and earn real cash:",
                         color = TextSecondary,
                         fontFamily = InterFamily,
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        lineHeight = 18.sp
+                        lineHeight = 16.sp
                     )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // Feature highlights row
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color.White.copy(alpha = 0.04f))
-                            .border(1.dp, BorderGlass, RoundedCornerShape(14.dp))
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        AuthBenefitRow(icon = "🎁", text = "10 Daily Free Spins + Bonus Multipliers")
-                        AuthBenefitRow(icon = "⚡", text = "Fast Global Payouts: PayPal, Cash App & Bank")
-                        AuthBenefitRow(icon = "🛡️", text = "100% Free to Play • No Deposits Ever")
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // 🚀 GOOGLE SIGN IN HERO BUTTON
+                    // 🚀 1. GOOGLE SIGN IN BUTTON
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(54.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                            .height(50.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(Color.White)
                             .clickable {
                                 soundManager.playButtonTap()
-                                // Sign out first so the Google Account Chooser dialog ALWAYS displays all available accounts
                                 googleSignInClient.signOut().addOnCompleteListener {
                                     try {
                                         googleSignInLauncher.launch(googleSignInClient.signInIntent)
                                     } catch (e: Exception) {
-                                        Toast.makeText(context, "Error launching Google Sign-In: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
@@ -214,12 +199,12 @@ fun AuthScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             // Google 'G' Icon
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
+                                    .size(24.dp)
                                     .clip(CircleShape)
                                     .background(Color(0xFFF1F3F4)),
                                 contentAlignment = Alignment.Center
@@ -228,7 +213,7 @@ fun AuthScreen(
                                     text = "G",
                                     color = Color(0xFF4285F4),
                                     fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 16.sp
+                                    fontSize = 15.sp
                                 )
                             }
 
@@ -237,15 +222,130 @@ fun AuthScreen(
                                 color = Color(0xFF1F1F1F),
                                 fontFamily = SoraFamily,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
+                                fontSize = 15.sp
                             )
                         }
                     }
 
+                    if (googleConnectedEmail != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "✅ Google Connected: $googleConnectedEmail",
+                            color = Emerald,
+                            fontFamily = InterFamily,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Divider Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(modifier = Modifier.weight(1f).height(1.dp).background(BorderGlass))
+                        Text(
+                            text = "OR ENTER DETAILS BELOW",
+                            color = TextTertiary,
+                            fontFamily = InterFamily,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Box(modifier = Modifier.weight(1f).height(1.dp).background(BorderGlass))
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // 📝 2. MANDATORY USER DETAILS (NAME, PHONE, AGE)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Full Name
+                        GlassTextField(
+                            value = inputName,
+                            onValueChange = { inputName = it },
+                            label = "Full Legal Name",
+                            placeholder = "Enter your full name"
+                        )
+
+                        // Phone Number with Country Code
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CountryCodeButton(
+                                selectedCountry = activeCountry,
+                                onCountrySelected = { viewModel.selectCountry(it) }
+                            )
+
+                            GlassTextField(
+                                value = inputPhone,
+                                onValueChange = { inputPhone = it },
+                                label = "Phone Number",
+                                placeholder = "Mobile number",
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        // Age
+                        GlassTextField(
+                            value = inputAge,
+                            onValueChange = { inputAge = it },
+                            label = "Age (Years)",
+                            placeholder = "e.g. 21",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // SUBMIT BUTTON
+                    PrimaryButton(
+                        text = "START PLAYING & EARN REWARDS 🚀",
+                        onClick = {
+                            val trimmedName = inputName.trim()
+                            val trimmedPhone = inputPhone.trim()
+                            val trimmedAge = inputAge.trim()
+
+                            if (trimmedName.isBlank()) {
+                                Toast.makeText(context, "Please enter your full name", Toast.LENGTH_SHORT).show()
+                                return@PrimaryButton
+                            }
+                            if (trimmedPhone.length < 6) {
+                                Toast.makeText(context, "Please enter a valid mobile phone number", Toast.LENGTH_SHORT).show()
+                                return@PrimaryButton
+                            }
+                            if (trimmedAge.isBlank()) {
+                                Toast.makeText(context, "Please enter your age", Toast.LENGTH_SHORT).show()
+                                return@PrimaryButton
+                            }
+
+                            viewModel.saveUserProfileDetails(
+                                name = trimmedName,
+                                email = inputEmail,
+                                photoUrl = inputPhotoUrl,
+                                phone = trimmedPhone,
+                                age = trimmedAge,
+                                countryCode = activeCountry.code,
+                                onSuccess = {
+                                    soundManager.playWin()
+                                    Toast.makeText(context, "Welcome, $trimmedName! Your wallet starts at ₹0.00.", Toast.LENGTH_SHORT).show()
+                                    onAuthSuccess()
+                                }
+                            )
+                        }
+                    )
+
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
-                        text = "🔒 Verified Google OAuth 2.0 • Instant & Secure",
+                        text = "🔒 100% Free • No Deposits • Instant UPI Withdrawals",
                         color = TextTertiary,
                         fontFamily = InterFamily,
                         fontSize = 11.sp
@@ -262,124 +362,22 @@ fun AuthScreen(
                     }
                 }
             }
-        }
 
-        // Complete Profile Dialog (Asks for Name, Phone Number, and Age)
-        if (showCompleteProfileDialog) {
-            Dialog(onDismissRequest = {}) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0xFF161622))
-                        .border(1.dp, BorderGlass, RoundedCornerShape(24.dp))
-                        .padding(22.dp)
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(PrimaryGradient),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(text = "👤", fontSize = 28.sp)
-                        }
+            Spacer(modifier = Modifier.height(20.dp))
 
-                        Text(
-                            text = "Complete Your Profile",
-                            color = TextPrimary,
-                            fontFamily = SoraFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
-                        )
-
-                        Text(
-                            text = "Confirm your details for payouts, rewards, and ATM Card:",
-                            color = TextSecondary,
-                            fontFamily = InterFamily,
-                            fontSize = 12.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-
-                        GlassTextField(
-                            value = pendingName,
-                            onValueChange = { pendingName = it },
-                            label = "Full Legal Name",
-                            placeholder = "Enter your full name"
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            CountryCodeButton(
-                                selectedCountry = activeCountry,
-                                onCountrySelected = { viewModel.selectCountry(it) }
-                            )
-
-                            GlassTextField(
-                                value = pendingPhone,
-                                onValueChange = { pendingPhone = it },
-                                label = "Phone Number",
-                                placeholder = "Mobile number",
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        GlassTextField(
-                            value = pendingAge,
-                            onValueChange = { pendingAge = it },
-                            label = "Age (Years)",
-                            placeholder = "e.g. 21",
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        PrimaryButton(
-                            text = "SAVE DETAILS & GET STARTED 🚀",
-                            onClick = {
-                                val trimmedName = pendingName.trim()
-                                val trimmedPhone = pendingPhone.trim()
-                                val trimmedAge = pendingAge.trim()
-
-                                if (trimmedName.isBlank()) {
-                                    Toast.makeText(context, "Please enter your full name", Toast.LENGTH_SHORT).show()
-                                    return@PrimaryButton
-                                }
-                                if (trimmedPhone.length < 6) {
-                                    Toast.makeText(context, "Please enter a valid mobile number", Toast.LENGTH_SHORT).show()
-                                    return@PrimaryButton
-                                }
-                                if (trimmedAge.isBlank()) {
-                                    Toast.makeText(context, "Please enter your age", Toast.LENGTH_SHORT).show()
-                                    return@PrimaryButton
-                                }
-
-                                viewModel.saveUserProfileDetails(
-                                    name = trimmedName,
-                                    email = pendingEmail,
-                                    photoUrl = pendingPhotoUrl,
-                                    phone = trimmedPhone,
-                                    age = trimmedAge,
-                                    countryCode = activeCountry.code,
-                                    onSuccess = {
-                                        soundManager.playWin()
-                                        Toast.makeText(context, "Welcome, $trimmedName!", Toast.LENGTH_SHORT).show()
-                                        showCompleteProfileDialog = false
-                                        onAuthSuccess()
-                                    }
-                                )
-                            }
-                        )
-                    }
-                }
+            // Feature Highlights at the bottom
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White.copy(alpha = 0.04f))
+                    .border(1.dp, BorderGlass, RoundedCornerShape(14.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AuthBenefitRow(icon = "🎁", text = "10 Daily Free Spins + Multiplier Rewards")
+                AuthBenefitRow(icon = "⚡", text = "Instant Direct Payouts: UPI, Google Pay & PhonePe")
+                AuthBenefitRow(icon = "🛡️", text = "Strict Fair Play • 1 Device 1 Account")
             }
         }
     }
@@ -394,10 +392,9 @@ private fun AuthBenefitRow(icon: String, text: String) {
         Text(text = icon, fontSize = 16.sp)
         Text(
             text = text,
-            color = TextPrimary,
+            color = TextSecondary,
             fontFamily = InterFamily,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
+            fontSize = 12.sp
         )
     }
 }

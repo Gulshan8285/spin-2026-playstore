@@ -80,10 +80,10 @@ fun VirtualAtmCard(
     cardNumber: String = "4532 •••• •••• 8892",
     validThru: String = "12/28",
     cvv: String = "742",
-    balanceRupees: Double = 250.00,
-    points: Int = 2500,
-    tier: UserTier = UserTier.GOLD,
-    currencySymbol: String = "$",
+    balanceRupees: Double = 0.0,
+    points: Int = 0,
+    tier: UserTier = UserTier.BRONZE,
+    currencySymbol: String = "₹",
     onCardClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {

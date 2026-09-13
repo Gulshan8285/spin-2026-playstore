@@ -137,7 +137,7 @@ fun MainAppRoot() {
             initialTab = activePolicyTab!!,
             onBack = { activePolicyTab = null }
         )
-    } else if (authState == AuthState.UNAUTHENTICATED) {
+    } else if (authState != AuthState.AUTHENTICATED) {
         AuthScreen(
             viewModel = authViewModel,
             onAuthSuccess = { currentScreen = Screen.Home }
