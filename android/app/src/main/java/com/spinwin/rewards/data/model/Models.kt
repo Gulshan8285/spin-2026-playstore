@@ -4,7 +4,7 @@ import com.spinwin.rewards.components.UserTier
 
 data class UserProfile(
     val uid: String = "",
-    val name: String = "Player",
+    val name: String = "",
     val email: String = "",
     val phone: String = "",
     val photoUrl: String = "",
@@ -24,7 +24,7 @@ data class UserProfile(
     val validThru: String = "12/28",
     val cvv: String = "689",
     val age: String = "",
-    val countryCode: String = "US"
+    val countryCode: String = "IN"
 )
 
 data class TransactionRecord(

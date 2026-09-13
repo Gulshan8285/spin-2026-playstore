@@ -55,7 +55,7 @@ class OfflineCacheManager(context: Context) {
 
     fun getUserProfile(): UserProfile? {
         val uid = prefs.getString("uid", null) ?: return null
-        val name = prefs.getString("name", "Player") ?: "Player"
+        val name = prefs.getString("name", "") ?: ""
         val email = prefs.getString("email", "") ?: ""
         val phone = prefs.getString("phone", "") ?: ""
         val photoUrl = prefs.getString("photoUrl", "") ?: ""
@@ -65,7 +65,7 @@ class OfflineCacheManager(context: Context) {
         val spinsToday = prefs.getInt("spinsToday", 0)
         val streak = prefs.getInt("streakDays", 1)
         val age = prefs.getString("age", "") ?: ""
-        val countryCode = prefs.getString("countryCode", "US") ?: "US"
+        val countryCode = prefs.getString("countryCode", "IN") ?: "IN"
 
         return UserProfile(
             uid = uid,

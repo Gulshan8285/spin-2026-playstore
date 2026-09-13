@@ -31,7 +31,7 @@ class RewardsRepository(context: Context) {
     private val _userProfile = MutableStateFlow(
         UserProfile(
             uid = "user_new",
-            name = "Player",
+            name = "",
             email = "",
             phone = "",
             points = 0,
@@ -42,7 +42,7 @@ class RewardsRepository(context: Context) {
             maxDailySpins = 10,
             streakDays = 1,
             age = "",
-            countryCode = "US"
+            countryCode = "IN"
         )
     )
     val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
