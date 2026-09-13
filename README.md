@@ -2,7 +2,16 @@
 
 A high-performance Android rewards and entertainment application built natively with **Kotlin** and **Jetpack Compose**, featuring a luxury dark-mode fintech/gamification UI (CRED/Revolut inspired).
 
-## 🚀 Key Features
+## 🌐 Live Links & Downloads
+
+| Service | Link | Description |
+| :--- | :--- | :--- |
+| 🖥️ **Live Web Admin Panel** | [**Open Admin Dashboard**](https://gulshan8285.github.io/SpinWinRewards/) | Free GitHub Pages hosted web admin console |
+| 📲 **Download Latest APK** | [**SpinWinRewards.apk (v1.0.0)**](https://github.com/Gulshan8285/SpinWinRewards/releases/latest/download/SpinWinRewards.apk) | Direct Android installation package (~1.8 MB) |
+| 📦 **Download Play Store AAB** | [**SpinWinRewards.aab (v1.0.0)**](https://github.com/Gulshan8285/SpinWinRewards/releases/latest/download/SpinWinRewards.aab) | Google Play Store App Bundle (~3.6 MB) |
+| 🔖 **All Releases & Versions** | [**GitHub Releases Hub**](https://github.com/Gulshan8285/SpinWinRewards/releases) | Cloud backup of all builds (never lost) |
+
+---
 
 - **Exclusive Google Sign-In**: Instant OAuth 2.0 authentication with real profile synchronization.
 - **Dynamic Worldwide Currency & Localization**: Automatic region detection and worldwide country calling codes with real-time multi-currency conversion ($ USD, £ GBP, € EUR, ₹ INR, etc.).
