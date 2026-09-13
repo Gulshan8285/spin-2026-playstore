@@ -6,10 +6,10 @@ A high-performance Android rewards and entertainment application built natively 
 
 | Service | Link | Description |
 | :--- | :--- | :--- |
-| 🖥️ **Live Web Admin Panel** | [**Open Admin Dashboard**](https://gulshan8285.github.io/SpinWinRewards/) | Free GitHub Pages hosted web admin console |
-| 📲 **Download Latest APK** | [**SpinWinRewards.apk (v1.0.0)**](https://github.com/Gulshan8285/SpinWinRewards/releases/latest/download/SpinWinRewards.apk) | Direct Android installation package (~1.8 MB) |
-| 📦 **Download Play Store AAB** | [**SpinWinRewards.aab (v1.0.0)**](https://github.com/Gulshan8285/SpinWinRewards/releases/latest/download/SpinWinRewards.aab) | Google Play Store App Bundle (~3.6 MB) |
-| 🔖 **All Releases & Versions** | [**GitHub Releases Hub**](https://github.com/Gulshan8285/SpinWinRewards/releases) | Cloud backup of all builds (never lost) |
+| 🖥️ **Live Web Admin Panel** | [**Open Admin Dashboard**](https://gulshan8285.github.io/spin-2026-playstore/) | Free GitHub Pages hosted web admin console |
+| 📲 **Download Latest APK** | [**SpinWinRewards.apk (v1.0.0)**](https://github.com/Gulshan8285/spin-2026-playstore/releases/latest/download/SpinWinRewards.apk) | Direct Android installation package (~1.8 MB) |
+| 📦 **Download Play Store AAB** | [**SpinWinRewards.aab (v1.0.0)**](https://github.com/Gulshan8285/spin-2026-playstore/releases/latest/download/SpinWinRewards.aab) | Google Play Store App Bundle (~3.6 MB) |
+| 🔖 **All Releases & Versions** | [**GitHub Releases Hub**](https://github.com/Gulshan8285/spin-2026-playstore/releases) | Cloud backup of all builds (never lost) |
 
 ---
 
@@ -35,8 +35,8 @@ A high-performance Android rewards and entertainment application built natively 
 
 ```bash
 # Clone the repository
-git clone https://github.com/Gulshan8285/SpinWinRewards.git
-cd SpinWinRewards/android
+git clone https://github.com/Gulshan8285/spin-2026-playstore.git
+cd spin-2026-playstore/android
 
 # Build Debug APK
 ./gradlew assembleDebug
