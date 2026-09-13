@@ -1,0 +1,35 @@
+# Built application files
+*.apk
+*.aab
+
+# Gradle & Android build files
+.gradle/
+build/
+*/build/
+app/build/
+android/.gradle/
+android/build/
+android/app/build/
+android/app/intermediates/
+
+# Node / Admin Panel
+node_modules/
+admin-panel/node_modules/
+dist/
+admin-panel/dist/
+.env.local
+.env.*.local
+
+# IDE & OS files
+.DS_Store
+Thumbs.db
+*.iml
+.idea/
+.vscode/
+*.log
+
+# Captures and debug
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties

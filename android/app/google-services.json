@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "888376316097",
+    "project_id": "spin-game-3f38a",
+    "storage_bucket": "spin-game-3f38a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:888376316097:android:f2ea36e3465197cec14440",
+        "android_client_info": {
+          "package_name": "com.spinwin.rewards"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "888376316097-5gbvsjnf3erj9trv7jqe51ijs8g7qe02.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.spinwin.rewards",
+            "certificate_hash": "c71a70839ee9c16927e7e09bc331b76b8286d87f"
+          }
+        },
+        {
+          "client_id": "888376316097-7k3162vpkiargedoj42ivk8t19dlk8ro.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.spinwin.rewards",
+            "certificate_hash": "be55001b96de73aabbfd4e4cf101fc22d10dfc1b"
+          }
+        },
+        {
+          "client_id": "888376316097-pmkdrr33k6pdligd54gfavlqu9k93han.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBt1gPq8dxTh1xSJkkte3WRtSj_w2y_iNw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "888376316097-pmkdrr33k6pdligd54gfavlqu9k93han.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_primary">#070B14</color>
+    <color name="bg_secondary">#0F1626</color>
+    <color name="neon_purple">#7C4DFF</color>
+    <color name="electric_cyan">#00D1FF</color>
+    <color name="gold">#FFC542</color>
+    <color name="emerald">#00E676</color>
+    <color name="coral_red">#FF3D71</color>
+</resources>

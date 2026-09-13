@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User Profiles: Users can read their own profile, write only non-sensitive profile fields
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId
+                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['points', 'balanceRupees', 'tier']);
+    }
+
+    // Transactions: Read only by the owner, created only via Cloud Functions/Admin
+    match /transactions/{txId} {
+      allow read: if request.auth != null && (resource.data.uid == request.auth.uid || request.auth.token.admin == true);
+      allow write: if false; // Server-side only
+    }
+
+    // Withdrawals: Read own withdrawals, create permitted if authenticated, updates server-side only
+    match /withdrawals/{wdId} {
+      allow read: if request.auth != null && (resource.data.uid == request.auth.uid || request.auth.token.admin == true);
+      allow write: if false; // Server-side only
+    }
+
+    // Leaderboard & Quizzes: Publicly readable by authenticated users
+    match /leaderboard/{period}/users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    match /quizzes/{quizId}/questions/{qId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // App Config: Read-only for clients
+    match /config/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}

@@ -1,0 +1,108 @@
+:root {
+  --bg-primary: #070B14;
+  --bg-secondary: #0F1626;
+  --surface-elevated: #16203A;
+  --neon-purple: #7C4DFF;
+  --electric-cyan: #00D1FF;
+  --gold: #FFC542;
+  --emerald: #00E676;
+  --coral-red: #FF3D71;
+  --text-primary: #FFFFFF;
+  --text-secondary: #A8B2C7;
+  --text-tertiary: #6B7A99;
+  --border-glass: rgba(255, 255, 255, 0.12);
+  --glass-overlay: rgba(255, 255, 255, 0.05);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .heading {
+  font-family: 'Sora', sans-serif;
+}
+
+.glass-card {
+  background: var(--glass-overlay);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-glass);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(124, 77, 255, 0.12);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #7C4DFF, #00D1FF);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(124, 77, 255, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(124, 77, 255, 0.5);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #FF3D71, #FF6B6B);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #00E676, #00BFA5);
+  color: #070B14;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-pending {
+  background: rgba(255, 197, 66, 0.15);
+  color: var(--gold);
+  border: 1px solid rgba(255, 197, 66, 0.3);
+}
+
+.badge-approved {
+  background: rgba(0, 230, 118, 0.15);
+  color: var(--emerald);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+}
+
+.badge-rejected {
+  background: rgba(255, 61, 113, 0.15);
+  color: var(--coral-red);
+  border: 1px solid rgba(255, 61, 113, 0.3);
+}
