@@ -100,7 +100,8 @@ fun AuthScreen(
                 val email = account.email ?: ""
                 val name = account.displayName ?: ""
                 val photo = account.photoUrl?.toString() ?: ""
-                viewModel.prepareUserSignIn(email, name, photo)
+                val idToken = account.idToken ?: ""
+                viewModel.prepareUserSignIn(email, name, photo, idToken)
                 pendingName = name
                 pendingEmail = email
                 pendingPhotoUrl = photo

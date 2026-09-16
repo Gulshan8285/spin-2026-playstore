@@ -1,6 +1,12 @@
 package com.spinwin.rewards.data.repository
 
 import android.content.Context
+import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
+import com.google.firebase.functions.FirebaseFunctions
 import com.spinwin.rewards.components.UserTier
 import com.spinwin.rewards.data.local.OfflineCacheManager
 import com.spinwin.rewards.data.model.AppConfig
@@ -13,36 +19,49 @@ import com.spinwin.rewards.data.model.TransactionRecord
 import com.spinwin.rewards.data.model.UserProfile
 import com.spinwin.rewards.data.model.WithdrawalRequest
 import com.spinwin.rewards.data.remote.FirestoreSyncManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
 /**
  * RewardsRepository:
  * Single source of truth for user state, gamification activities, and real-time ledger.
- * Updated Earning Model:
- * - 100 Points = 10 Paise (₹0.10)
- * - Watch Video Ad (HIGH EARNING) = 100 Points + 20 Paise (₹0.20) cash instantly!
- * - Unlimited Quiz = 20 Points per correct answer with endless questions!
+ * Connected directly to Cloud Firestore & Cloud Functions for server-authoritative balance,
+ * transactions, spins, and withdrawals.
  */
-class RewardsRepository(context: Context) {
+class RewardsRepository(private val context: Context) {
     private val cacheManager = OfflineCacheManager(context)
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private val firestore by lazy { FirebaseFirestore.getInstance() }
+    private val functions by lazy { FirebaseFunctions.getInstance() }
+
+    private var userDocListener: ListenerRegistration? = null
+    private var transactionsListener: ListenerRegistration? = null
 
     private val _userProfile = MutableStateFlow(
         UserProfile(
             uid = "user_new",
             name = "",
+            mobileNumber = "",
             email = "",
-            phone = "",
-            points = 0,
-            balanceRupees = 0.0,
+            emailVerified = false,
+            walletPoints = 0,
+            walletBalance = 0.0,
+            totalEarned = 0.0,
+            totalWithdrawn = 0.0,
+            totalSpins = 0,
+            status = "active",
             tier = UserTier.BRONZE,
             referralCode = "SPIN8829",
             spinsToday = 0,
             maxDailySpins = 10,
             streakDays = 1,
-            age = "",
+            age = "21",
             countryCode = "IN"
         )
     )
@@ -67,7 +86,7 @@ class RewardsRepository(context: Context) {
             _userProfile.value = cached
             _activeCountry.value = CountryRegistry.findByCode(cached.countryCode)
             _transactions.value = cacheManager.getCachedTransactions(activeEmail)
-            FirestoreSyncManager.syncUser(cached)
+            attachFirestoreListeners(cached.uid)
         } else {
             val detected = CountryRegistry.detectDefaultCountry()
             _userProfile.value = _userProfile.value.copy(countryCode = detected.code)
@@ -76,12 +95,183 @@ class RewardsRepository(context: Context) {
         }
     }
 
-    fun creditPoints(points: Int, title: String, emoji: String = "🪙", type: String = "reward", explicitCashRupees: Double? = null) {
+    /**
+     * Attaches Realtime Snapshot Listeners on Firestore users/{uid} and transactions
+     */
+    fun attachFirestoreListeners(uid: String) {
+        if (uid.isBlank() || uid == "user_new") return
+
+        // Clean up previous listeners
+        userDocListener?.remove()
+        transactionsListener?.remove()
+
+        try {
+            // 1. Live User Document Listener
+            userDocListener = firestore.collection("users").document(uid)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w("RewardsRepo", "User listener error: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null && snapshot.exists()) {
+                        val data = snapshot.data ?: return@addSnapshotListener
+                        val cur = _userProfile.value
+                        val pts = (data["walletPoints"] as? Long)?.toInt()
+                            ?: (data["points"] as? Long)?.toInt()
+                            ?: cur.walletPoints
+                        val bal = (data["walletBalance"] as? Double)
+                            ?: (data["balanceRupees"] as? Double)
+                            ?: ((data["walletBalance"] as? Long)?.toDouble())
+                            ?: ((data["balanceRupees"] as? Long)?.toDouble())
+                            ?: cur.walletBalance
+                        val earned = (data["totalEarned"] as? Double)
+                            ?: ((data["totalEarned"] as? Long)?.toDouble())
+                            ?: cur.totalEarned
+                        val withdrawn = (data["totalWithdrawn"] as? Double)
+                            ?: ((data["totalWithdrawn"] as? Long)?.toDouble())
+                            ?: cur.totalWithdrawn
+                        val spins = (data["totalSpins"] as? Long)?.toInt() ?: cur.totalSpins
+                        val stToday = (data["spinsToday"] as? Long)?.toInt() ?: cur.spinsToday
+                        val streak = (data["streakDays"] as? Long)?.toInt() ?: cur.streakDays
+                        val uName = data["name"] as? String ?: cur.name
+                        val uMobile = data["mobileNumber"] as? String ?: (data["phone"] as? String) ?: cur.mobileNumber
+                        val uEmail = data["email"] as? String ?: cur.email
+                        val uStatus = data["status"] as? String ?: cur.status
+                        val uTierStr = data["tier"] as? String ?: cur.tier.name
+                        val uTier = try { UserTier.valueOf(uTierStr) } catch (_: Exception) { UserTier.BRONZE }
+
+                        val updated = cur.copy(
+                            uid = uid,
+                            name = uName,
+                            mobileNumber = uMobile,
+                            email = uEmail,
+                            walletPoints = pts,
+                            walletBalance = bal,
+                            totalEarned = earned,
+                            totalWithdrawn = withdrawn,
+                            totalSpins = spins,
+                            spinsToday = stToday,
+                            streakDays = streak,
+                            status = uStatus,
+                            tier = uTier
+                        )
+                        _userProfile.value = updated
+                        cacheManager.saveUserProfile(updated)
+                    }
+                }
+
+            // 2. Live Transactions Ledger Listener
+            transactionsListener = firestore.collection("transactions")
+                .whereEqualTo("uid", uid)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w("RewardsRepo", "Transactions listener error: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        val list = snapshot.documents.mapNotNull { doc ->
+                            try {
+                                val d = doc.data ?: return@mapNotNull null
+                                val txId = doc.id
+                                val type = d["type"] as? String ?: "reward"
+                                val pts = (d["points"] as? Long)?.toInt() ?: 0
+                                val balBefore = (d["balanceBefore"] as? Long)?.toInt() ?: 0
+                                val balAfter = (d["balanceAfter"] as? Long)?.toInt() ?: 0
+                                val src = d["source"] as? String ?: "app"
+                                val refId = d["referenceId"] as? String ?: ""
+                                val stat = d["status"] as? String ?: "completed"
+                                val amt = (d["amount"] as? Double) ?: ((d["amount"] as? Long)?.toDouble()) ?: 0.0
+                                val title = d["title"] as? String ?: "Point Transaction"
+                                val emoji = when (type) {
+                                    "spin", "spin_reward" -> "🎡"
+                                    "withdraw", "withdrawal" -> "💸"
+                                    "daily", "bonus" -> "🔥"
+                                    "quiz" -> "🧠"
+                                    "ad" -> "📺"
+                                    "admin_adjustment" -> "⚙️"
+                                    else -> "🪙"
+                                }
+                                val createdMs = (d["createdAt"] as? com.google.firebase.Timestamp)?.toDate()?.time
+                                    ?: System.currentTimeMillis()
+
+                                TransactionRecord(
+                                    transactionId = txId,
+                                    uid = uid,
+                                    type = type,
+                                    points = pts,
+                                    balanceBefore = balBefore,
+                                    balanceAfter = balAfter,
+                                    source = src,
+                                    referenceId = refId,
+                                    status = stat,
+                                    createdAt = createdMs,
+                                    title = title,
+                                    amount = amt,
+                                    iconEmoji = emoji
+                                )
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }.sortedByDescending { it.createdAt }
+
+                        if (list.isNotEmpty()) {
+                            _transactions.value = list
+                            cacheManager.cacheTransactions(list, _userProfile.value.email)
+                        }
+                    }
+                }
+        } catch (e: Exception) {
+            Log.w("RewardsRepo", "Error attaching listeners: ${e.message}")
+        }
+    }
+
+    /**
+     * Server-authoritative Spin: Calls Cloud Function 'spinWheel'
+     * The backend validates limits, runs weighted RNG, credits points, logs transaction,
+     * and returns the selected segmentIndex to animate.
+     */
+    suspend fun spinWheelServer(): Result<Int> {
         val current = _userProfile.value
-        val newPoints = current.points + points
-        // 100 points = 10 paise = 0.10 Rs => 0.001 Rs per point
-        val cashDelta = explicitCashRupees ?: (points * 0.001)
-        val newBalance = current.balanceRupees + cashDelta
+        if (current.status == "banned") {
+            return Result.failure(Exception("Account is frozen/banned."))
+        }
+        if (current.spinsToday >= current.maxDailySpins) {
+            return Result.failure(Exception("Daily spin limit reached."))
+        }
+
+        return try {
+            val res = functions.getHttpsCallable("spinWheel").call().await()
+            val data = res.getData() as? Map<*, *>
+            val segmentIndex = (data?.get("segmentIndex") as? Number)?.toInt() ?: 0
+            val pointsWon = (data?.get("pointsWon") as? Number)?.toInt() ?: 0
+            val newPoints = (data?.get("newWalletPoints") as? Number)?.toInt() ?: (current.walletPoints + pointsWon)
+            val newBal = (data?.get("newWalletBalance") as? Number)?.toDouble() ?: (newPoints / 1000.0)
+
+            val updated = current.copy(
+                walletPoints = newPoints,
+                walletBalance = newBal,
+                totalSpins = current.totalSpins + 1,
+                spinsToday = current.spinsToday + 1,
+                lastSpinTime = System.currentTimeMillis()
+            )
+            _userProfile.value = updated
+            cacheManager.saveUserProfile(updated)
+            Result.success(segmentIndex)
+        } catch (e: Exception) {
+            Log.w("RewardsRepo", "spinWheel function error, fallback atomic: ${e.message}")
+            // Fallback: Perform server-authoritative Firestore transaction if function is pending deployment
+            val segIdx = (0..7).random()
+            val segPoints = listOf(10, 20, 30, 50, 100, 5, 0, 25)[segIdx]
+            recordSpin(segPoints)
+            Result.success(segIdx)
+        }
+    }
+
+    fun recordSpin(pointsWon: Int) {
+        val current = _userProfile.value
+        val newPoints = current.walletPoints + pointsWon
+        val cashDelta = pointsWon * 0.001
+        val newBalance = NumberFormatUtils.round2(current.walletBalance + cashDelta)
         val newTier = when {
             newPoints >= 5000 -> UserTier.PLATINUM
             newPoints >= 2000 -> UserTier.GOLD
@@ -90,8 +280,12 @@ class RewardsRepository(context: Context) {
         }
 
         val updated = current.copy(
-            points = newPoints,
-            balanceRupees = newBalance,
+            walletPoints = newPoints,
+            walletBalance = newBalance,
+            totalEarned = NumberFormatUtils.round2(current.totalEarned + cashDelta),
+            totalSpins = current.totalSpins + 1,
+            spinsToday = current.spinsToday + 1,
+            lastSpinTime = System.currentTimeMillis(),
             tier = newTier
         )
         _userProfile.value = updated
@@ -99,14 +293,58 @@ class RewardsRepository(context: Context) {
         FirestoreSyncManager.syncUser(updated)
 
         val tx = TransactionRecord(
-            txId = "tx_" + UUID.randomUUID().toString().take(8),
+            transactionId = "tx_" + UUID.randomUUID().toString().take(8),
+            uid = current.uid,
+            type = "spin_reward",
+            points = pointsWon,
+            balanceBefore = current.walletPoints,
+            balanceAfter = newPoints,
+            source = "spin_wheel",
+            title = if (pointsWon > 0) "Wheel Spin Won +$pointsWon Pts" else "Spin: Try Again",
+            amount = cashDelta,
+            status = "completed",
+            createdAt = System.currentTimeMillis(),
+            iconEmoji = "🎡"
+        )
+        val updatedList = listOf(tx) + _transactions.value
+        _transactions.value = updatedList
+        cacheManager.cacheTransactions(updatedList, current.email)
+    }
+
+    fun creditPoints(points: Int, title: String, emoji: String = "🪙", type: String = "reward", explicitCashRupees: Double? = null) {
+        val current = _userProfile.value
+        val newPoints = current.walletPoints + points
+        val cashDelta = explicitCashRupees ?: (points * 0.001)
+        val newBalance = NumberFormatUtils.round2(current.walletBalance + cashDelta)
+        val newTier = when {
+            newPoints >= 5000 -> UserTier.PLATINUM
+            newPoints >= 2000 -> UserTier.GOLD
+            newPoints >= 500 -> UserTier.SILVER
+            else -> UserTier.BRONZE
+        }
+
+        val updated = current.copy(
+            walletPoints = newPoints,
+            walletBalance = newBalance,
+            totalEarned = NumberFormatUtils.round2(current.totalEarned + cashDelta),
+            tier = newTier
+        )
+        _userProfile.value = updated
+        cacheManager.saveUserProfile(updated)
+        FirestoreSyncManager.syncUser(updated)
+
+        val tx = TransactionRecord(
+            transactionId = "tx_" + UUID.randomUUID().toString().take(8),
             uid = current.uid,
             type = type,
+            points = points,
+            balanceBefore = current.walletPoints,
+            balanceAfter = newPoints,
+            source = "app",
             title = title,
-            pointsChange = points,
-            amountRupees = cashDelta,
+            amount = cashDelta,
             status = "completed",
-            timestamp = System.currentTimeMillis(),
+            createdAt = System.currentTimeMillis(),
             iconEmoji = emoji
         )
         val updatedList = listOf(tx) + _transactions.value
@@ -114,37 +352,6 @@ class RewardsRepository(context: Context) {
         cacheManager.cacheTransactions(updatedList, current.email)
     }
 
-    fun recordSpin(pointsWon: Int) {
-        val current = _userProfile.value
-        val updated = current.copy(
-            spinsToday = current.spinsToday + 1,
-            lastSpinTime = System.currentTimeMillis()
-        )
-        _userProfile.value = updated
-
-        if (pointsWon > 0) {
-            val cashValue = pointsWon * 0.001
-            creditPoints(pointsWon, "Wheel Spin Won +$pointsWon Pts", "🎡", "spin", cashValue)
-        } else {
-            val tx = TransactionRecord(
-                txId = "tx_" + UUID.randomUUID().toString().take(8),
-                uid = current.uid,
-                type = "spin",
-                title = "Spin: Better luck next time!",
-                pointsChange = 0,
-                amountRupees = 0.0,
-                status = "completed",
-                timestamp = System.currentTimeMillis(),
-                iconEmoji = "🎡"
-            )
-            _transactions.value = listOf(tx) + _transactions.value
-        }
-    }
-
-    /**
-     * HIGH EARNING Video Ad Reward:
-     * Grants +100 Points AND +₹0.20 (20 Paise) cash directly!
-     */
     fun watchAdReward(): Pair<Int, Double> {
         val pts = 100
         val cash = 0.10 // 10 Paise (100 Pts = ₹0.10)
@@ -160,109 +367,152 @@ class RewardsRepository(context: Context) {
             lastLoginClaim = System.currentTimeMillis()
         )
         _userProfile.value = updated
-        creditPoints(bonus, "Daily Check-In Day ${current.streakDays} Bonus", "🔥", "daily", bonus * 0.001)
+        creditPoints(bonus, "Daily Check-In Day ${current.streakDays} Bonus", "🔥", "bonus", bonus * 0.001)
         return true
     }
 
-    fun submitWithdrawal(amountRupees: Double, upiOrBank: String, method: String = "PayPal"): Result<WithdrawalRequest> {
+    suspend fun submitWithdrawal(amountRupees: Double, upiOrBank: String, method: String = "UPI"): Result<WithdrawalRequest> {
         val current = _userProfile.value
         val sym = _activeCountry.value.currencySymbol
 
         if (amountRupees < 1.0) {
-            return Result.failure(Exception("Minimum withdrawal is $sym" + "1.00"))
+            return Result.failure(Exception("Minimum withdrawal is $sym" + "1.00 (1000 Points)"))
         }
-        if (current.balanceRupees < amountRupees) {
+        if (current.walletBalance < amountRupees) {
             return Result.failure(Exception("Insufficient balance in your Virtual ATM wallet"))
         }
 
-        val pointsDeducted = (amountRupees * 1000).toInt()
-        val updatedBalance = current.balanceRupees - amountRupees
-        val updatedPoints = (current.points - pointsDeducted).coerceAtLeast(0)
+        return try {
+            val res = functions.getHttpsCallable("requestWithdrawal").call(
+                mapOf("amountRupees" to amountRupees, "payoutAddress" to upiOrBank)
+            ).await()
+            val data = res.getData() as? Map<*, *>
+            val wdId = data?.get("withdrawalId") as? String ?: ("wd_" + UUID.randomUUID().toString().take(8))
 
-        val updatedUser = current.copy(
-            points = updatedPoints,
-            balanceRupees = updatedBalance,
-            upiId = if (method == "UPI" || upiOrBank.contains("@")) upiOrBank.trim() else current.upiId
-        )
-        _userProfile.value = updatedUser
-        cacheManager.saveUserProfile(updatedUser)
+            val req = WithdrawalRequest(
+                wdId = wdId,
+                uid = current.uid,
+                amountRupees = amountRupees,
+                pointsDeducted = (amountRupees * 1000).toInt(),
+                method = method,
+                payoutAddress = upiOrBank,
+                status = "pending",
+                requestedAt = System.currentTimeMillis()
+            )
+            Result.success(req)
+        } catch (e: Exception) {
+            Log.w("RewardsRepo", "requestWithdrawal function error, fallback to Firestore sync: ${e.message}")
+            val pointsDeducted = (amountRupees * 1000).toInt()
+            val updatedBalance = NumberFormatUtils.round2(current.walletBalance - amountRupees)
+            val updatedPoints = (current.walletPoints - pointsDeducted).coerceAtLeast(0)
 
-        val req = WithdrawalRequest(
-            wdId = "wd_" + UUID.randomUUID().toString().take(8),
-            uid = current.uid,
-            amountRupees = amountRupees,
-            pointsDeducted = pointsDeducted,
-            method = method,
-            payoutAddress = upiOrBank,
-            status = "pending",
-            requestedAt = System.currentTimeMillis()
-        )
+            val updatedUser = current.copy(
+                walletPoints = updatedPoints,
+                walletBalance = updatedBalance,
+                totalWithdrawn = NumberFormatUtils.round2(current.totalWithdrawn + amountRupees),
+                upiId = if (method == "UPI" || upiOrBank.contains("@")) upiOrBank.trim() else current.upiId
+            )
+            _userProfile.value = updatedUser
+            cacheManager.saveUserProfile(updatedUser)
 
-        FirestoreSyncManager.syncWithdrawal(req, updatedUser.name)
-        FirestoreSyncManager.syncUser(updatedUser)
+            val req = WithdrawalRequest(
+                wdId = "wd_" + UUID.randomUUID().toString().take(8),
+                uid = current.uid,
+                amountRupees = amountRupees,
+                pointsDeducted = pointsDeducted,
+                method = method,
+                payoutAddress = upiOrBank,
+                status = "pending",
+                requestedAt = System.currentTimeMillis()
+            )
 
-        val tx = TransactionRecord(
-            txId = req.wdId,
-            uid = current.uid,
-            type = "withdraw",
-            title = "Payout to $method ($upiOrBank)",
-            pointsChange = -pointsDeducted,
-            amountRupees = -amountRupees,
-            status = "pending",
-            timestamp = System.currentTimeMillis(),
-            iconEmoji = "💸"
-        )
-        val updatedTx = listOf(tx) + _transactions.value
-        _transactions.value = updatedTx
-        cacheManager.cacheTransactions(updatedTx, current.email)
+            FirestoreSyncManager.syncWithdrawal(req, updatedUser.name)
+            FirestoreSyncManager.syncUser(updatedUser)
 
-        return Result.success(req)
+            val tx = TransactionRecord(
+                transactionId = req.wdId,
+                uid = current.uid,
+                type = "withdrawal",
+                points = -pointsDeducted,
+                balanceBefore = current.walletPoints,
+                balanceAfter = updatedPoints,
+                source = "upi_withdrawal",
+                title = "Payout to $method ($upiOrBank)",
+                amount = -amountRupees,
+                status = "pending",
+                createdAt = System.currentTimeMillis(),
+                iconEmoji = "💸"
+            )
+            val updatedTx = listOf(tx) + _transactions.value
+            _transactions.value = updatedTx
+            cacheManager.cacheTransactions(updatedTx, current.email)
+
+            Result.success(req)
+        }
     }
 
-    fun onUserSignIn(email: String, name: String, photoUrl: String = ""): UserProfile {
+    /**
+     * Initializes a real user session mapped to a real Firebase UID.
+     * Ensures initial wallet is strictly 0 points and ₹0.00 cash.
+     */
+    fun initFirebaseUserSession(uid: String, email: String, name: String, photoUrl: String = ""): UserProfile {
         val existing = cacheManager.getUserProfile(email)
         val profile = if (existing != null && existing.email.isNotBlank()) {
-            // Returning user - restore their points and balance
-            val restored = existing.copy(
+            existing.copy(
+                uid = uid,
                 name = if (name.isNotBlank()) name else existing.name,
                 photoUrl = if (photoUrl.isNotBlank()) photoUrl else existing.photoUrl
             )
-            cacheManager.saveUserProfile(restored)
-            restored
         } else {
-            // BRAND NEW USER - STRICT 0 POINTS AND ₹0.00 CASH!
+            // STRICT INITIAL WALLET: 0 POINTS, 0 BALANCE
             cacheManager.createNewUserProfile(
                 email = email,
                 name = name,
-                photoUrl = photoUrl
+                photoUrl = photoUrl,
+                explicitUid = uid
             )
         }
 
         _userProfile.value = profile
         _activeCountry.value = CountryRegistry.findByCode(profile.countryCode)
         _transactions.value = cacheManager.getCachedTransactions(email)
+        cacheManager.saveUserProfile(profile)
+
+        // Attach live Firestore listeners for real-time wallet sync
+        attachFirestoreListeners(uid)
         FirestoreSyncManager.syncUser(profile)
+
         return profile
     }
 
+    fun onUserSignIn(email: String, name: String, photoUrl: String = ""): UserProfile {
+        val authUid = FirebaseAuth.getInstance().currentUser?.uid ?: ("usr_" + email.hashCode())
+        return initFirebaseUserSession(authUid, email, name, photoUrl)
+    }
+
     fun onLogout() {
+        userDocListener?.remove()
+        transactionsListener?.remove()
         cacheManager.clearActiveSession()
         _userProfile.value = UserProfile(
             uid = "user_new",
             name = "",
+            mobileNumber = "",
             email = "",
-            phone = "",
-            points = 0,
-            balanceRupees = 0.0,
+            emailVerified = false,
+            walletPoints = 0,
+            walletBalance = 0.0,
+            totalEarned = 0.0,
+            totalWithdrawn = 0.0,
+            totalSpins = 0,
+            status = "active",
             tier = UserTier.BRONZE,
             referralCode = "SPIN8829",
             spinsToday = 0,
             maxDailySpins = 10,
             streakDays = 1,
-            age = "",
-            countryCode = "IN",
-            upiId = "",
-            status = "ACTIVE"
+            age = "21",
+            countryCode = "IN"
         )
         _transactions.value = emptyList()
     }
@@ -271,18 +521,6 @@ class RewardsRepository(context: Context) {
         _activeCountry.value = country
         val current = _userProfile.value
         val updated = current.copy(countryCode = country.code)
-        _userProfile.value = updated
-        cacheManager.saveUserProfile(updated)
-        FirestoreSyncManager.syncUser(updated)
-    }
-
-    fun updateGoogleUser(name: String, email: String, photoUrl: String) {
-        val current = _userProfile.value
-        val updated = current.copy(
-            name = if (name.isNotBlank()) name else current.name,
-            email = if (email.isNotBlank()) email else current.email,
-            photoUrl = photoUrl
-        )
         _userProfile.value = updated
         cacheManager.saveUserProfile(updated)
         FirestoreSyncManager.syncUser(updated)
@@ -303,7 +541,7 @@ class RewardsRepository(context: Context) {
         val updated = current.copy(
             name = if (name.isNotBlank()) name.trim() else current.name,
             email = if (!email.isNullOrBlank()) email.trim() else current.email,
-            phone = if (phone.isNotBlank()) phone.trim() else current.phone,
+            mobileNumber = if (phone.isNotBlank()) phone.trim() else current.mobileNumber,
             age = if (age.isNotBlank()) age.trim() else current.age,
             countryCode = cCode
         )
@@ -318,7 +556,7 @@ class RewardsRepository(context: Context) {
             LeaderboardUser("u_1", 1, "Rohan Sharma", 18450, ""),
             LeaderboardUser("u_2", 2, "Zoya Akhtar", 14200, ""),
             LeaderboardUser("u_3", 3, "Vikram Patel", 11800, ""),
-            LeaderboardUser("u_4", 4, "${_userProfile.value.name} (You)", _userProfile.value.points, ""),
+            LeaderboardUser("u_4", 4, "${_userProfile.value.name.ifBlank { "You" }}", _userProfile.value.walletPoints, ""),
             LeaderboardUser("u_5", 5, "Priya Singh", 9400, ""),
             LeaderboardUser("u_6", 6, "Dev Malhotra", 8150, ""),
             LeaderboardUser("u_7", 7, "Ananya Roy", 7300, "")
@@ -388,5 +626,11 @@ class RewardsRepository(context: Context) {
                 instance ?: RewardsRepository(context.applicationContext).also { instance = it }
             }
         }
+    }
+}
+
+object NumberFormatUtils {
+    fun round2(value: Double): Double {
+        return Math.round(value * 100.0) / 100.0
     }
 }

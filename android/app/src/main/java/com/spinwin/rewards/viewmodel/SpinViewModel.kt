@@ -39,31 +39,27 @@ class SpinViewModel(application: Application) : AndroidViewModel(application) {
     fun startSpin(): Boolean {
         if (_isSpinning.value) return false
         val profile = userProfile.value
+        if (profile.status == "banned") return false
         if (profile.spinsToday >= profile.maxDailySpins) return false
 
-        // Pick weighted target segment index (simulating server decision)
-        // Indices: 0: 10pts, 1: 20pts, 2: 30pts, 3: 50pts, 4: 100pts, 5: 5pts, 6: Try Again, 7: 25pts
-        val weights = listOf(25, 20, 15, 10, 5, 15, 5, 5) // Weighted probabilities
-        val sumWeights = weights.sum()
-        var rand = Random.nextInt(sumWeights)
-        var selectedIdx = 0
-        for (i in weights.indices) {
-            if (rand < weights[i]) {
-                selectedIdx = i
-                break
-            }
-            rand -= weights[i]
-        }
-
-        _targetSegmentIndex.value = selectedIdx
         _isSpinning.value = true
+        viewModelScope.launch {
+            val result = repository.spinWheelServer()
+            result.fold(
+                onSuccess = { segIdx ->
+                    _targetSegmentIndex.value = segIdx
+                },
+                onFailure = {
+                    _isSpinning.value = false
+                }
+            )
+        }
         return true
     }
 
     fun onSpinCompleted(segment: WheelSegment) {
         _isSpinning.value = false
         _lastWonSegment.value = segment
-        repository.recordSpin(segment.points)
         _showWinDialog.value = true
     }
 

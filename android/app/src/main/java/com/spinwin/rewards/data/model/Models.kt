@@ -5,13 +5,22 @@ import com.spinwin.rewards.components.UserTier
 data class UserProfile(
     val uid: String = "",
     val name: String = "",
+    val mobileNumber: String = "",
     val email: String = "",
-    val phone: String = "",
-    val photoUrl: String = "",
-    val points: Int = 0,
-    val balanceRupees: Double = 0.0,
-    val tier: UserTier = UserTier.BRONZE,
+    val emailVerified: Boolean = false,
+    val walletPoints: Int = 0,
+    val walletBalance: Double = 0.0,
+    val totalEarned: Double = 0.0,
+    val totalWithdrawn: Double = 0.0,
+    val totalSpins: Int = 0,
+    val status: String = "active",
     val referralCode: String = "SPIN8829",
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val lastLoginAt: Long = System.currentTimeMillis(),
+    // UI convenience & gamification fields
+    val photoUrl: String = "",
+    val tier: UserTier = UserTier.BRONZE,
     val referredBy: String? = null,
     val spinsToday: Int = 0,
     val maxDailySpins: Int = 10,
@@ -23,22 +32,34 @@ data class UserProfile(
     val cardNumber: String = "5412 •••• •••• 9921",
     val validThru: String = "12/28",
     val cvv: String = "689",
-    val age: String = "",
+    val age: String = "21",
     val countryCode: String = "IN",
-    val upiId: String = "",
-    val status: String = "ACTIVE"
-)
+    val upiId: String = ""
+) {
+    // Backward-compatible UI accessors
+    val points: Int get() = walletPoints
+    val balanceRupees: Double get() = walletBalance
+    val phone: String get() = mobileNumber
+}
 
 data class TransactionRecord(
-    val txId: String = "",
+    val transactionId: String = "",
     val uid: String = "",
-    val type: String = "spin", // spin, quiz, ad, referral, withdraw
+    val type: String = "spin_reward", // spin_reward, bonus, referral, withdrawal, admin_adjustment, reversal
+    val points: Int = 0,
+    val balanceBefore: Int = 0,
+    val balanceAfter: Int = 0,
+    val source: String = "app",
+    val referenceId: String = "",
+    val status: String = "completed", // completed, pending, failed, rejected
+    val createdAt: Long = System.currentTimeMillis(),
     val title: String = "",
-    val pointsChange: Int = 0,
-    val amountRupees: Double = 0.0,
-    val status: String = "completed", // completed, pending, failed
-    val timestamp: Long = System.currentTimeMillis(),
-    val iconEmoji: String = "🪙"
+    val amount: Double = 0.0,
+    val iconEmoji: String = "🪙",
+    val txId: String = transactionId,
+    val pointsChange: Int = points,
+    val amountRupees: Double = amount,
+    val timestamp: Long = createdAt
 )
 
 data class WithdrawalRequest(

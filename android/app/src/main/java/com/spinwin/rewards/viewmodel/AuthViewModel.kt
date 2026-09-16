@@ -1,19 +1,21 @@
 package com.spinwin.rewards.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import com.spinwin.rewards.data.model.UserProfile
 import com.spinwin.rewards.data.repository.RewardsRepository
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
-import android.content.Context
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import kotlinx.coroutines.tasks.await
 
 enum class AuthState {
     AUTHENTICATED, UNAUTHENTICATED, LOADING
@@ -22,6 +24,7 @@ enum class AuthState {
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = RewardsRepository.getInstance(application)
     private val authPrefs = application.getSharedPreferences("spinwin_auth_session", Context.MODE_PRIVATE)
+    private val firebaseAuth by lazy { FirebaseAuth.getInstance() }
 
     // User is only authenticated if they explicitly completed registration with Name, Phone, and Age
     private val _authState = MutableStateFlow(
@@ -49,9 +52,23 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         repository.updateCountry(country)
     }
 
-    fun prepareUserSignIn(email: String, name: String, photoUrl: String = "") {
-        if (email.isNotBlank()) {
-            repository.onUserSignIn(email, name, photoUrl)
+    fun prepareUserSignIn(email: String, name: String, photoUrl: String = "", idToken: String = "") {
+        viewModelScope.launch {
+            try {
+                if (idToken.isNotBlank()) {
+                    val credential = GoogleAuthProvider.getCredential(idToken, null)
+                    val result = firebaseAuth.signInWithCredential(credential).await()
+                    val realUid = result.user?.uid ?: ("usr_" + email.hashCode())
+                    repository.initFirebaseUserSession(realUid, email, name, photoUrl)
+                } else {
+                    val currentUid = firebaseAuth.currentUser?.uid ?: ("usr_" + email.hashCode())
+                    repository.initFirebaseUserSession(currentUid, email, name, photoUrl)
+                }
+            } catch (e: Exception) {
+                Log.w("AuthViewModel", "Firebase signInWithCredential notice: ${e.message}")
+                val currentUid = firebaseAuth.currentUser?.uid ?: ("usr_" + email.hashCode())
+                repository.initFirebaseUserSession(currentUid, email, name, photoUrl)
+            }
         }
     }
 
@@ -66,8 +83,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         viewModelScope.launch {
             _authState.value = AuthState.LOADING
+            val currentUid = firebaseAuth.currentUser?.uid ?: repository.userProfile.value.uid.ifBlank { "usr_" + email.hashCode() }
             if (email.isNotBlank()) {
-                repository.onUserSignIn(email, name, photoUrl)
+                repository.initFirebaseUserSession(currentUid, email, name, photoUrl)
             }
             repository.updateUserDetails(name, phone, age, countryCode, email)
             authPrefs.edit()
@@ -86,6 +104,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun logout() {
+        try {
+            firebaseAuth.signOut()
+        } catch (_: Exception) {}
         repository.onLogout()
         authPrefs.edit().clear().apply()
         _authState.value = AuthState.UNAUTHENTICATED

@@ -10,3 +10,9 @@
 -keep class com.google.android.gms.auth.api.signin.** { *; }
 -keep interface com.google.android.gms.auth.api.signin.** { *; }
 -dontwarn com.google.android.gms.auth.api.signin.**
+
+# Firebase Services
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
+-keep class io.grpc.** { *; }
+-dontwarn io.grpc.**

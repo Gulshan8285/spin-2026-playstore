@@ -69,9 +69,7 @@ android {
             excludes += "META-INF/DEPENDENCIES"
             excludes += "META-INF/LICENSE*"
             excludes += "META-INF/NOTICE*"
-            excludes += "**/*.proto"
-            excludes += "google/**"
-            excludes += "kotlin/**"
+            excludes += "META-INF/INDEX.LIST"
         }
     }
 }
@@ -94,12 +92,20 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.0")
 
     // Google AdMob Lite (Lightweight client SDK for minimum APK footprint)
     implementation("com.google.android.gms:play-services-ads-lite:23.0.0")
 
     // Google Sign-In SDK
     implementation("com.google.android.gms:play-services-auth:21.0.0")
+
+    // Firebase BoM & Official Firebase Services
+    val firebaseBom = platform("com.google.firebase:firebase-bom:33.7.0")
+    implementation(firebaseBom)
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-functions-ktx")
 
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")

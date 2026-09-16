@@ -59,10 +59,16 @@ class OfflineCacheManager(context: Context) {
             put("uid", user.uid)
             put("name", user.name)
             put("email", user.email)
+            put("mobileNumber", user.mobileNumber)
             put("phone", user.phone)
             put("photoUrl", user.photoUrl)
-            put("points", user.points)
-            put("balance", user.balanceRupees)
+            put("walletPoints", user.walletPoints)
+            put("walletBalance", user.walletBalance)
+            put("points", user.walletPoints)
+            put("balance", user.walletBalance)
+            put("totalEarned", user.totalEarned)
+            put("totalWithdrawn", user.totalWithdrawn)
+            put("totalSpins", user.totalSpins)
             put("tier", user.tier.name)
             put("referralCode", user.referralCode)
             put("spinsToday", user.spinsToday)
@@ -88,8 +94,8 @@ class OfflineCacheManager(context: Context) {
             putString("name", user.name)
             putString("email", user.email)
             putString("phone", user.phone)
-            putInt("points", user.points)
-            putFloat("balance", user.balanceRupees.toFloat())
+            putInt("points", user.walletPoints)
+            putFloat("balance", user.walletBalance.toFloat())
             putString("upiId", user.upiId)
             apply()
         }
@@ -100,17 +106,21 @@ class OfflineCacheManager(context: Context) {
         name: String,
         photoUrl: String = "",
         phone: String = "",
-        age: String = ""
+        age: String = "",
+        explicitUid: String? = null
     ): UserProfile {
-        val uniqueUid = "usr_" + UUID.randomUUID().toString().take(10)
+        val uniqueUid = explicitUid ?: ("usr_" + UUID.randomUUID().toString().take(10))
         val freshProfile = UserProfile(
             uid = uniqueUid,
             name = name,
             email = email,
-            phone = phone,
+            mobileNumber = phone,
             photoUrl = photoUrl,
-            points = 0, // STRICT 0 POINTS
-            balanceRupees = 0.0, // STRICT ₹0.00 CASH
+            walletPoints = 0, // STRICT 0 POINTS
+            walletBalance = 0.0, // STRICT ₹0.00 CASH
+            totalEarned = 0.0,
+            totalWithdrawn = 0.0,
+            totalSpins = 0,
             tier = UserTier.BRONZE,
             referralCode = "SPIN" + (1000..9999).random(),
             spinsToday = 0,
@@ -119,7 +129,7 @@ class OfflineCacheManager(context: Context) {
             age = age,
             countryCode = "IN",
             upiId = "",
-            status = "ACTIVE"
+            status = "active"
         )
 
         saveUserProfile(freshProfile)
@@ -135,14 +145,19 @@ class OfflineCacheManager(context: Context) {
             if (rawJson != null) {
                 try {
                     val obj = JSONObject(rawJson)
+                    val pts = obj.optInt("walletPoints", obj.optInt("points", 0))
+                    val bal = obj.optDouble("walletBalance", obj.optDouble("balance", 0.0))
                     return UserProfile(
                         uid = obj.optString("uid", "usr_" + targetEmail.hashCode()),
                         name = obj.optString("name", ""),
                         email = obj.optString("email", targetEmail),
-                        phone = obj.optString("phone", ""),
+                        mobileNumber = obj.optString("mobileNumber", obj.optString("phone", "")),
                         photoUrl = obj.optString("photoUrl", ""),
-                        points = obj.optInt("points", 0),
-                        balanceRupees = obj.optDouble("balance", 0.0),
+                        walletPoints = pts,
+                        walletBalance = bal,
+                        totalEarned = obj.optDouble("totalEarned", 0.0),
+                        totalWithdrawn = obj.optDouble("totalWithdrawn", 0.0),
+                        totalSpins = obj.optInt("totalSpins", 0),
                         tier = try { UserTier.valueOf(obj.optString("tier", "BRONZE")) } catch (_: Exception) { UserTier.BRONZE },
                         referralCode = obj.optString("referralCode", "SPIN8829"),
                         spinsToday = obj.optInt("spinsToday", 0),
@@ -150,7 +165,7 @@ class OfflineCacheManager(context: Context) {
                         age = obj.optString("age", ""),
                         countryCode = obj.optString("countryCode", "IN"),
                         upiId = obj.optString("upiId", ""),
-                        status = obj.optString("status", "ACTIVE")
+                        status = obj.optString("status", "active")
                     )
                 } catch (_: Exception) {}
             }
@@ -160,24 +175,26 @@ class OfflineCacheManager(context: Context) {
         val uid = prefs.getString("uid", null) ?: return null
         val legacyEmail = prefs.getString("email", "") ?: ""
         if (targetEmail != null && legacyEmail.isNotBlank() && legacyEmail != targetEmail) {
-            return null // Do not bleed another user's legacy data into this target email!
+            return null
         }
 
+        val pts = prefs.getInt("points", 0)
+        val bal = prefs.getFloat("balance", 0.0f).toDouble()
         return UserProfile(
             uid = uid,
             name = prefs.getString("name", "") ?: "",
             email = legacyEmail,
-            phone = prefs.getString("phone", "") ?: "",
+            mobileNumber = prefs.getString("phone", "") ?: "",
             photoUrl = prefs.getString("photoUrl", "") ?: "",
-            points = prefs.getInt("points", 0),
-            balanceRupees = prefs.getFloat("balance", 0.0f).toDouble(),
+            walletPoints = pts,
+            walletBalance = bal,
             referralCode = prefs.getString("referralCode", "SPIN8829") ?: "SPIN8829",
             spinsToday = prefs.getInt("spinsToday", 0),
             streakDays = prefs.getInt("streakDays", 1),
             age = prefs.getString("age", "") ?: "",
             countryCode = prefs.getString("countryCode", "IN") ?: "IN",
             upiId = prefs.getString("upiId", "") ?: "",
-            status = "ACTIVE"
+            status = "active"
         )
     }
 

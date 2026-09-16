@@ -5,13 +5,15 @@ import {
   collection,
   onSnapshot,
   doc,
-  updateDoc
+  updateDoc,
+  setDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import {
   Users, CheckCircle,
   Settings, AlertCircle, Eye, EyeOff, RotateCw, LogOut, ShieldCheck,
-  Bell, Send, Edit3, Smartphone, Save,
-  FileText, Gift, RefreshCw
+  Bell, Send, Edit3, Save,
+  FileText, Gift, RefreshCw, History
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -44,14 +46,36 @@ interface UserItem {
   name: string;
   email: string;
   phone: string;
+  mobileNumber: string;
   upiId: string;
   points: number;
+  walletPoints: number;
+  walletBalance: number;
+  totalEarned: number;
+  totalWithdrawn: number;
+  totalSpins: number;
   tier: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
   referrals: number;
   status: 'ACTIVE' | 'BANNED';
   deviceModel: string;
   registeredDate: string;
   lastActive: string;
+}
+
+interface AuditLogItem {
+  logId: string;
+  adminUid: string;
+  targetUid: string;
+  targetUserName: string;
+  targetUserEmail: string;
+  oldPoints: number;
+  newPoints: number;
+  pointsChanged: number;
+  oldBalance: number;
+  newBalance: number;
+  reason: string;
+  transactionId?: string;
+  timestamp: string;
 }
 
 interface BroadcastHistory {
@@ -109,7 +133,7 @@ export default function App() {
   // =========================================================================
   // 📂 2. TABS & STATE MANAGEMENT
   // =========================================================================
-  const [activeTab, setActiveTab] = useState<'users' | 'withdrawals' | 'limits' | 'content' | 'notifications'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'withdrawals' | 'audit' | 'limits' | 'content' | 'notifications'>('users');
   const [notification, setNotification] = useState<string | null>(null);
 
   const showNotice = (msg: string) => {
@@ -126,9 +150,9 @@ export default function App() {
       try { return JSON.parse(saved); } catch (_) {}
     }
     return {
-      minWithdrawalINR: 50,      // Minimum withdrawal: ₹50
+      minWithdrawalINR: 50,        // Minimum withdrawal: ₹50
       maxDailyWithdrawalINR: 1000, // Max daily limit: ₹1,000
-      pointsPerRupee: 10,        // 10 Points = ₹1.00 INR (100 Pts = ₹10.00)
+      pointsPerRupee: 1000,        // 1000 Points = ₹1.00 INR (100 Pts = ₹0.10)
       dailySpinLimit: 10,
       dailyScratchLimit: 5,
       quizRewardPoints: 20,
@@ -142,43 +166,19 @@ export default function App() {
     e.preventDefault();
     localStorage.setItem('spinwin_financial_config', JSON.stringify(config));
     setLimitsSaved(true);
-    showNotice(`✅ Withdrawal Limit updated to ₹${config.minWithdrawalINR} Min & ₹${config.maxDailyWithdrawalINR} Max!`);
+    showNotice(`✅ Financial Settings updated! Rate: ${config.pointsPerRupee} Pts = ₹1.00 INR`);
     setTimeout(() => setLimitsSaved(false), 3000);
   };
 
-  // =========================================================================
   // =========================================================================
   // 👥 4. LIVE FIRESTORE USERS & REAL-TIME LEDGER
   // =========================================================================
   const [firestoreStatus, setFirestoreStatus] = useState<'connected' | 'connecting' | 'error'>('connecting');
   const [firestoreErrorMsg, setFirestoreErrorMsg] = useState<string | null>(null);
 
-  const [users, setUsers] = useState<UserItem[]>(() => {
-    const saved = localStorage.getItem('spinwin_real_users');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (_) {}
-    }
-    return [
-      {
-        uid: 'user_active_01',
-        name: 'Gulshan Yadav',
-        email: 'gulshanyadav62000@gmail.com',
-        phone: '+91 98765 43210',
-        upiId: 'gulshanyadav62000@okaxis',
-        points: 0, // strictly 0 points initially, so cash is ₹0.00
-        tier: 'BRONZE',
-        referrals: 0,
-        status: 'ACTIVE',
-        deviceModel: 'Android Device (Single Real Installation)',
-        registeredDate: 'Active Now',
-        lastActive: 'Online Now 🟢'
-      }
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem('spinwin_real_users', JSON.stringify(users));
-  }, [users]);
+  // NO HARDCODED DEMO USERS - strictly empty initial state, loaded live from Firestore
+  const [users, setUsers] = useState<UserItem[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
 
   // Real-time Firestore Users Listener
   useEffect(() => {
@@ -186,31 +186,38 @@ export default function App() {
     try {
       const usersCol = collection(firestoreDb, 'users');
       unsubscribeUsers = onSnapshot(usersCol, (snapshot) => {
-        if (!snapshot.empty) {
-          const liveUsers: UserItem[] = snapshot.docs.map(docSnap => {
-            const data = docSnap.data();
-            const pts = Number(data.points) || 0;
-            return {
-              uid: data.uid || docSnap.id,
-              name: data.name || 'Player',
-              email: data.email || '—',
-              phone: data.phone || '—',
-              upiId: data.upiId || '—',
-              points: pts,
-              tier: (data.tier as any) || 'BRONZE',
-              referrals: Number(data.referrals) || 0,
-              status: (data.status === 'BANNED' ? 'BANNED' : 'ACTIVE') as 'ACTIVE' | 'BANNED',
-              deviceModel: data.deviceModel || 'Android Device',
-              registeredDate: data.registeredDate || 'Recent',
-              lastActive: data.lastActive || 'Active Now 🟢'
-            };
-          });
-          setUsers(liveUsers);
-          setFirestoreStatus('connected');
-          setFirestoreErrorMsg(null);
-        } else {
-          setFirestoreStatus('connected');
-        }
+        const liveUsers: UserItem[] = snapshot.docs.map(docSnap => {
+          const data = docSnap.data();
+          const pts = Number(data.walletPoints ?? data.points ?? 0);
+          const bal = Number(data.walletBalance ?? data.balanceRupees ?? (pts / config.pointsPerRupee));
+          const earned = Number(data.totalEarned ?? 0);
+          const withdrawn = Number(data.totalWithdrawn ?? 0);
+          const spins = Number(data.totalSpins ?? 0);
+          const mob = String(data.mobileNumber || data.phone || '—');
+          return {
+            uid: data.uid || docSnap.id,
+            name: data.name || 'Player',
+            email: data.email || '—',
+            phone: mob,
+            mobileNumber: mob,
+            upiId: data.upiId || '—',
+            points: pts,
+            walletPoints: pts,
+            walletBalance: bal,
+            totalEarned: earned,
+            totalWithdrawn: withdrawn,
+            totalSpins: spins,
+            tier: (data.tier as any) || 'BRONZE',
+            referrals: Number(data.referrals) || 0,
+            status: (data.status === 'banned' || data.status === 'BANNED' ? 'BANNED' : 'ACTIVE') as 'ACTIVE' | 'BANNED',
+            deviceModel: data.deviceModel || 'Android Device',
+            registeredDate: data.registeredDate || (data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString() : 'Active Now'),
+            lastActive: data.lastActive || 'Active Now 🟢'
+          };
+        });
+        setUsers(liveUsers);
+        setFirestoreStatus('connected');
+        setFirestoreErrorMsg(null);
       }, (err) => {
         console.warn("Firestore users listener error:", err);
         setFirestoreStatus('error');
@@ -224,78 +231,132 @@ export default function App() {
     return () => {
       if (unsubscribeUsers) unsubscribeUsers();
     };
+  }, [config.pointsPerRupee]);
+
+  // Real-time Firestore Audit Logs Listener
+  useEffect(() => {
+    let unsubscribeAudit: (() => void) | undefined;
+    try {
+      const auditCol = collection(firestoreDb, 'auditLogs');
+      unsubscribeAudit = onSnapshot(auditCol, (snapshot) => {
+        const logs: AuditLogItem[] = snapshot.docs.map(docSnap => {
+          const d = docSnap.data();
+          return {
+            logId: d.logId || docSnap.id,
+            adminUid: d.adminUid || 'admin_master',
+            targetUid: d.targetUid || '—',
+            targetUserName: d.targetUserName || '—',
+            targetUserEmail: d.targetUserEmail || '—',
+            oldPoints: Number(d.oldPoints ?? 0),
+            newPoints: Number(d.newPoints ?? 0),
+            pointsChanged: Number(d.pointsChanged ?? 0),
+            oldBalance: Number(d.oldBalance ?? 0),
+            newBalance: Number(d.newBalance ?? 0),
+            reason: d.reason || 'Admin Adjustment',
+            transactionId: d.transactionId,
+            timestamp: d.timestamp?.toDate ? d.timestamp.toDate().toLocaleString() : 'Recent'
+          };
+        });
+        setAuditLogs(logs);
+      }, (err) => {
+        console.warn("Firestore audit logs listener notice:", err);
+      });
+    } catch (_) {}
+
+    return () => {
+      if (unsubscribeAudit) unsubscribeAudit();
+    };
   }, []);
 
   // Selected User for Editing
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
   const [editPointsInput, setEditPointsInput] = useState<number>(0);
+  const [editReasonInput, setEditReasonInput] = useState<string>('');
+  const [editStatusInput, setEditStatusInput] = useState<'ACTIVE' | 'BANNED'>('ACTIVE');
   const [editUpiInput, setEditUpiInput] = useState('');
   const [editPhoneInput, setEditPhoneInput] = useState('');
 
   const openUserEditor = (user: UserItem) => {
     setEditingUser(user);
-    setEditPointsInput(user.points);
+    setEditPointsInput(user.walletPoints);
+    setEditReasonInput('');
+    setEditStatusInput(user.status);
     setEditUpiInput(user.upiId);
     setEditPhoneInput(user.phone);
   };
 
-  const handleSaveUserEdits = (e: React.FormEvent) => {
+  const handleSaveUserEdits = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
-    const pts = Math.max(0, Number(editPointsInput) || 0);
-    const updatedUsers = users.map(u => {
-      if (u.uid === editingUser.uid) {
-        return {
-          ...u,
-          points: pts,
-          upiId: editUpiInput.trim(),
-          phone: editPhoneInput.trim()
-        };
-      }
-      return u;
-    });
-    setUsers(updatedUsers);
-    setEditingUser(null);
-    showNotice(`✅ Updated user profile for ${editingUser.name}!`);
+
+    if (!editReasonInput.trim()) {
+      showNotice("⚠️ Mandatory: Enter a Reason for this modification (Audit requirement)!");
+      return;
+    }
+
+    const oldPoints = editingUser.walletPoints;
+    const newPts = Math.max(0, Number(editPointsInput) || 0);
+    const delta = newPts - oldPoints;
+    const oldBal = editingUser.walletBalance;
+    const newBal = Number((newPts / config.pointsPerRupee).toFixed(2));
 
     try {
       const userRef = doc(firestoreDb, 'users', editingUser.uid);
-      updateDoc(userRef, {
-        points: pts,
-        balanceRupees: pts / config.pointsPerRupee,
+      await updateDoc(userRef, {
+        walletPoints: newPts,
+        walletBalance: newBal,
+        points: newPts,
+        balanceRupees: newBal,
+        status: editStatusInput.toLowerCase(),
+        phone: editPhoneInput.trim(),
+        mobileNumber: editPhoneInput.trim(),
         upiId: editUpiInput.trim(),
-        phone: editPhoneInput.trim()
+        updatedAt: serverTimestamp()
       });
-    } catch (err) {
-      console.warn("Could not push update to Firestore:", err);
+
+      // Write immutable transaction record
+      const txRef = doc(collection(firestoreDb, 'transactions'));
+      await setDoc(txRef, {
+        transactionId: txRef.id,
+        uid: editingUser.uid,
+        type: 'admin_adjustment',
+        points: delta,
+        balanceBefore: oldPoints,
+        balanceAfter: newPts,
+        source: 'admin_panel',
+        amount: Number((delta / config.pointsPerRupee).toFixed(2)),
+        title: `Admin Adjustment: ${editReasonInput.trim()}`,
+        status: 'completed',
+        createdAt: serverTimestamp()
+      });
+
+      // Write audit log entry
+      const logRef = doc(collection(firestoreDb, 'auditLogs'));
+      await setDoc(logRef, {
+        logId: logRef.id,
+        adminUid: 'admin_master',
+        targetUid: editingUser.uid,
+        targetUserName: editingUser.name,
+        targetUserEmail: editingUser.email,
+        oldPoints: oldPoints,
+        newPoints: newPts,
+        pointsChanged: delta,
+        oldBalance: oldBal,
+        newBalance: newBal,
+        reason: editReasonInput.trim(),
+        transactionId: txRef.id,
+        timestamp: serverTimestamp()
+      });
+
+      showNotice(`✅ Wallet & Status updated for ${editingUser.name} with audit trail!`);
+      setEditingUser(null);
+    } catch (err: any) {
+      showNotice(`⚠️ Error updating user: ${err.message}`);
     }
   };
 
-  // --- WITHDRAWALS STATE (INDIAN RUPEES ONLY) ---
-  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>(() => {
-    const saved = localStorage.getItem('spinwin_withdrawals_inr');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (_) {}
-    }
-    return [
-      {
-        id: 'WD-IN-101',
-        userName: 'Gulshan Yadav',
-        uid: 'user_active_01',
-        amountINR: 50.0,
-        pointsDeducted: 500,
-        method: 'UPI',
-        upiId: 'gulshanyadav62000@okaxis',
-        status: 'pending',
-        time: 'Today, 10 mins ago',
-        isRealUser: true
-      }
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem('spinwin_withdrawals_inr', JSON.stringify(withdrawals));
-  }, [withdrawals]);
+  // --- WITHDRAWALS STATE (NO DEMO DATA - loaded live from Firestore) ---
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
 
   // Real-time Firestore Withdrawals Listener
   useEffect(() => {
@@ -303,24 +364,22 @@ export default function App() {
     try {
       const wdCol = collection(firestoreDb, 'withdrawals');
       unsubscribeWds = onSnapshot(wdCol, (snapshot) => {
-        if (!snapshot.empty) {
-          const liveWds: Withdrawal[] = snapshot.docs.map(docSnap => {
-            const data = docSnap.data();
-            return {
-              id: data.id || docSnap.id,
-              userName: data.userName || 'User',
-              uid: data.uid || '—',
-              amountINR: Number(data.amountINR) || 0,
-              pointsDeducted: Number(data.pointsDeducted) || 0,
-              method: (data.method === 'Bank Transfer' ? 'Bank Transfer' : 'UPI'),
-              upiId: data.upiId || '—',
-              status: data.status || 'pending',
-              time: data.time || 'Recent',
-              isRealUser: true
-            };
-          });
-          setWithdrawals(liveWds);
-        }
+        const liveWds: Withdrawal[] = snapshot.docs.map(docSnap => {
+          const data = docSnap.data();
+          return {
+            id: data.id || data.withdrawalId || docSnap.id,
+            userName: data.userName || 'User',
+            uid: data.uid || '—',
+            amountINR: Number(data.amountINR ?? data.amountRupees ?? 0),
+            pointsDeducted: Number(data.pointsDeducted ?? 0),
+            method: (data.method === 'Bank Transfer' ? 'Bank Transfer' : 'UPI'),
+            upiId: data.upiId || data.payoutAddress || '—',
+            status: data.status || 'pending',
+            time: data.time || (data.requestedAt?.toDate ? data.requestedAt.toDate().toLocaleString() : 'Recent'),
+            isRealUser: true
+          };
+        });
+        setWithdrawals(liveWds);
       }, (err) => {
         console.warn("Firestore withdrawals listener error:", err);
       });
@@ -331,14 +390,67 @@ export default function App() {
     };
   }, []);
 
-  const handleApproveWithdrawal = (id: string) => {
-    setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, status: 'approved' } : w));
-    showNotice(`✅ UPI Withdrawal #${id} APPROVED! Dispatched via UPI Gateway.`);
+  const handleApproveWithdrawal = async (id: string) => {
+    try {
+      const wdRef = doc(firestoreDb, 'withdrawals', id);
+      await updateDoc(wdRef, {
+        status: 'approved',
+        processedAt: serverTimestamp()
+      });
+      const txRef = doc(firestoreDb, 'transactions', id);
+      await updateDoc(txRef, { status: 'approved' }).catch(() => {});
+      showNotice(`✅ UPI Withdrawal #${id} APPROVED & Recorded in Database!`);
+    } catch (err: any) {
+      showNotice(`⚠️ Error approving withdrawal: ${err.message}`);
+    }
   };
 
-  const handleRejectWithdrawal = (id: string) => {
-    setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, status: 'rejected' } : w));
-    showNotice(`❌ UPI Withdrawal #${id} REJECTED. Points refunded to user balance.`);
+  const handleRejectWithdrawal = async (id: string) => {
+    try {
+      const wd = withdrawals.find(w => w.id === id);
+      const wdRef = doc(firestoreDb, 'withdrawals', id);
+      await updateDoc(wdRef, {
+        status: 'rejected',
+        rejectReason: 'Rejected by Admin',
+        processedAt: serverTimestamp()
+      });
+      // Refund points to target user
+      if (wd) {
+        const userRef = doc(firestoreDb, 'users', wd.uid);
+        const userDoc = users.find(u => u.uid === wd.uid);
+        if (userDoc) {
+          const newPts = userDoc.walletPoints + wd.pointsDeducted;
+          const newBal = Number((newPts / config.pointsPerRupee).toFixed(2));
+          await updateDoc(userRef, {
+            walletPoints: newPts,
+            walletBalance: newBal,
+            points: newPts,
+            balanceRupees: newBal,
+            updatedAt: serverTimestamp()
+          });
+
+          // Write reversal transaction
+          const revTx = doc(collection(firestoreDb, 'transactions'));
+          await setDoc(revTx, {
+            transactionId: revTx.id,
+            uid: wd.uid,
+            type: 'reversal',
+            points: wd.pointsDeducted,
+            balanceBefore: userDoc.walletPoints,
+            balanceAfter: newPts,
+            source: 'admin_panel',
+            referenceId: id,
+            amount: wd.amountINR,
+            title: `Refund for Rejected Withdrawal #${id}`,
+            status: 'completed',
+            createdAt: serverTimestamp()
+          });
+        }
+      }
+      showNotice(`❌ UPI Withdrawal #${id} REJECTED & Points Refunded to User!`);
+    } catch (err: any) {
+      showNotice(`⚠️ Error rejecting withdrawal: ${err.message}`);
+    }
   };
 
   // =========================================================================
@@ -768,42 +880,52 @@ export default function App() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '24px' }}>
           <div className="glass-card" style={{ padding: '20px', borderRadius: '16px', background: '#131B2E', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6B7A99', fontSize: '13px', marginBottom: '8px' }}>
-              <span>ACTIVE REAL DEVICES</span>
-              <Smartphone size={18} color="#00D1FF" />
+              <span>REGISTERED REAL USERS</span>
+              <Users size={18} color="#00D1FF" />
             </div>
-            <div style={{ fontSize: '26px', fontWeight: 800, color: '#fff' }}>{users.length} Installed Phone</div>
-            <div style={{ fontSize: '12px', color: '#00E676', marginTop: '4px' }}>● 100% Genuine User (No Demo Bots)</div>
+            <div style={{ fontSize: '26px', fontWeight: 800, color: '#fff' }}>{users.length} Registered</div>
+            <div style={{ fontSize: '12px', color: '#00E676', marginTop: '4px' }}>
+              ● {users.filter(u => u.status === 'ACTIVE').length} Active Accounts Live
+            </div>
           </div>
 
           <div className="glass-card" style={{ padding: '20px', borderRadius: '16px', background: '#131B2E', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6B7A99', fontSize: '13px', marginBottom: '8px' }}>
-              <span>REAL USER POINTS</span>
+              <span>TOTAL WALLET POINTS</span>
               <Gift size={18} color="#FFC542" />
             </div>
             <div style={{ fontSize: '26px', fontWeight: 800, color: '#FFC542' }}>
-              {users[0]?.points || 0} Pts
+              {users.reduce((acc, u) => acc + (u.walletPoints || 0), 0).toLocaleString()} Pts
             </div>
             <div style={{ fontSize: '12px', color: '#A8B2C7', marginTop: '4px' }}>
-              Live Value: ₹{users[0]?.points ? (users[0].points / config.pointsPerRupee).toFixed(2) : '0.00'} INR
+              Live Value: ₹{(users.reduce((acc, u) => acc + (u.walletPoints || 0), 0) / config.pointsPerRupee).toFixed(2)} INR
             </div>
           </div>
 
           <div className="glass-card" style={{ padding: '20px', borderRadius: '16px', background: '#131B2E', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6B7A99', fontSize: '13px', marginBottom: '8px' }}>
-              <span>PENDING UPI WITHDRAWALS</span>
+              <span>UPI WITHDRAWALS</span>
               <CheckCircle size={18} color="#FF4D4D" />
             </div>
-            <div style={{ fontSize: '26px', fontWeight: 800, color: '#FF4D4D' }}>{pendingWithdrawalsCount} Requests</div>
-            <div style={{ fontSize: '12px', color: '#6B7A99', marginTop: '4px' }}>Awaiting Admin Dispatch</div>
+            <div style={{ fontSize: '26px', fontWeight: 800, color: '#FF4D4D' }}>
+              {pendingWithdrawalsCount} Pending / {withdrawals.filter(w => w.status === 'approved').length} Done
+            </div>
+            <div style={{ fontSize: '12px', color: '#6B7A99', marginTop: '4px' }}>
+              Total Disbursed: ₹{withdrawals.filter(w => w.status === 'approved').reduce((acc, w) => acc + w.amountINR, 0).toFixed(2)} INR
+            </div>
           </div>
 
           <div className="glass-card" style={{ padding: '20px', borderRadius: '16px', background: '#131B2E', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6B7A99', fontSize: '13px', marginBottom: '8px' }}>
-              <span>WITHDRAWAL MIN LIMIT</span>
+              <span>TOTAL SPINS & RATE</span>
               <ShieldCheck size={18} color="#00E676" />
             </div>
-            <div style={{ fontSize: '26px', fontWeight: 800, color: '#00E676' }}>₹{config.minWithdrawalINR}.00</div>
-            <div style={{ fontSize: '12px', color: '#A8B2C7', marginTop: '4px' }}>Rate: {config.pointsPerRupee} Points = ₹1.00</div>
+            <div style={{ fontSize: '26px', fontWeight: 800, color: '#00E676' }}>
+              {users.reduce((acc, u) => acc + (u.totalSpins || 0), 0)} Spins Done
+            </div>
+            <div style={{ fontSize: '12px', color: '#A8B2C7', marginTop: '4px' }}>
+              Rate: {config.pointsPerRupee} Points = ₹1.00 INR
+            </div>
           </div>
         </div>
 
@@ -864,6 +986,27 @@ export default function App() {
                 {pendingWithdrawalsCount}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('audit')}
+            style={{
+              padding: '12px 18px',
+              border: 'none',
+              background: 'none',
+              color: activeTab === 'audit' ? '#00D1FF' : '#A8B2C7',
+              borderBottom: activeTab === 'audit' ? '3px solid #00D1FF' : '3px solid transparent',
+              fontWeight: 700,
+              fontSize: '14px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <History size={18} />
+            Audit Ledger ({auditLogs.length})
           </button>
 
           <button
@@ -1178,6 +1321,45 @@ export default function App() {
                     </div>
 
                     <div>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#FFC542', marginBottom: '6px', fontWeight: 700 }}>
+                        Mandatory Reason for Adjustment (Logged to Audit Trail) *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. VIP Reward Grant / Goodwill correction / User Support"
+                        value={editReasonInput}
+                        onChange={(e) => setEditReasonInput(e.target.value)}
+                        style={{
+                          width: '100%', padding: '12px', borderRadius: '10px',
+                          background: '#0F1626', border: '1px solid rgba(255,197,66,0.3)',
+                          color: '#fff', fontSize: '14px', outline: 'none',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#A8B2C7', marginBottom: '6px', fontWeight: 600 }}>
+                        Account Status Control
+                      </label>
+                      <select
+                        value={editStatusInput}
+                        onChange={(e) => setEditStatusInput(e.target.value as 'ACTIVE' | 'BANNED')}
+                        style={{
+                          width: '100%', padding: '12px', borderRadius: '10px',
+                          background: '#0F1626', border: '1px solid rgba(255,255,255,0.15)',
+                          color: editStatusInput === 'ACTIVE' ? '#00E676' : '#FF4D4D',
+                          fontSize: '14px', fontWeight: 700, outline: 'none',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        <option value="ACTIVE" style={{ color: '#00E676' }}>🟢 ACTIVE (Normal Access)</option>
+                        <option value="BANNED" style={{ color: '#FF4D4D' }}>🔴 BANNED (Frozen Account)</option>
+                      </select>
+                    </div>
+
+                    <div>
                       <label style={{ display: 'block', fontSize: '12px', color: '#A8B2C7', marginBottom: '6px', fontWeight: 600 }}>
                         Registered UPI ID (VPA)
                       </label>
@@ -1335,6 +1517,79 @@ export default function App() {
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ===================================================================
+            TAB: AUDIT LOGS & ADMIN ADJUSTMENTS LEDGER
+            =================================================================== */}
+        {activeTab === 'audit' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', margin: 0 }}>
+                  Immutable Audit Ledger & Admin Modifications ({auditLogs.length} Records)
+                </h2>
+                <p style={{ fontSize: '13px', color: '#6B7A99', margin: '4px 0 0 0' }}>
+                  Every administrative point modification, status freeze/unfreeze, and balance adjustment is recorded with mandatory reason and timestamp.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ background: '#131B2E', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#6B7A99', background: '#0F1626' }}>
+                    <th style={{ padding: '16px' }}>TIMESTAMP</th>
+                    <th style={{ padding: '16px' }}>TARGET USER</th>
+                    <th style={{ padding: '16px' }}>ACTION / POINTS DELTA</th>
+                    <th style={{ padding: '16px' }}>BALANCE BEFORE & AFTER</th>
+                    <th style={{ padding: '16px' }}>MANDATORY REASON</th>
+                    <th style={{ padding: '16px' }}>ADMIN ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: '#6B7A99' }}>
+                        No audit logs recorded yet. All administrative actions will appear here in real time.
+                      </td>
+                    </tr>
+                  ) : (
+                    auditLogs.map((log) => (
+                      <tr key={log.logId} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '16px', color: '#A8B2C7' }}>{log.timestamp}</td>
+                        <td style={{ padding: '16px' }}>
+                          <div style={{ fontWeight: 600, color: '#fff' }}>{log.targetUserName}</div>
+                          <div style={{ fontSize: '11px', color: '#00D1FF' }}>UID: {log.targetUid}</div>
+                        </td>
+                        <td style={{ padding: '16px' }}>
+                          <span style={{
+                            padding: '4px 10px', borderRadius: '6px', fontWeight: 800, fontSize: '13px',
+                            background: log.pointsChanged >= 0 ? 'rgba(0, 230, 118, 0.15)' : 'rgba(255, 77, 77, 0.15)',
+                            color: log.pointsChanged >= 0 ? '#00E676' : '#FF4D4D'
+                          }}>
+                            {log.pointsChanged >= 0 ? `+${log.pointsChanged}` : log.pointsChanged} Pts
+                          </span>
+                        </td>
+                        <td style={{ padding: '16px', color: '#FFC542' }}>
+                          {log.oldPoints} Pts ➔ {log.newPoints} Pts
+                          <div style={{ fontSize: '11px', color: '#6B7A99' }}>
+                            (₹{log.oldBalance.toFixed(2)} ➔ ₹{log.newBalance.toFixed(2)})
+                          </div>
+                        </td>
+                        <td style={{ padding: '16px', color: '#fff', fontWeight: 500 }}>
+                          {log.reason}
+                        </td>
+                        <td style={{ padding: '16px', color: '#6B7A99', fontSize: '12px' }}>
+                          {log.adminUid}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

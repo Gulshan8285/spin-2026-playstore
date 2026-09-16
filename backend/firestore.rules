@@ -1,42 +1,85 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // User Profiles: Users can read their own profile, write only non-sensitive profile fields
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid))
+      );
+    }
+
+    // Users Collection
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId
-                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['points', 'balanceRupees', 'tier']);
+      // Users can only read their own profile; admins can read all profiles
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Users can initialize their own profile on registration ONLY with 0 walletPoints & 0 walletBalance
+      allow create: if isOwner(userId) &&
+        request.resource.data.walletPoints == 0 &&
+        request.resource.data.walletBalance == 0.0 &&
+        request.resource.data.totalEarned == 0.0 &&
+        request.resource.data.totalWithdrawn == 0.0 &&
+        request.resource.data.totalSpins == 0;
+
+      // Users can update harmless profile fields (name, phone, upiId, age),
+      // but NEVER walletPoints, walletBalance, totalEarned, totalWithdrawn, status, or role.
+      // Admin users have full update permissions.
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'walletPoints', 'walletBalance', 'points', 'balanceRupees',
+          'totalEarned', 'totalWithdrawn', 'totalSpins', 'status', 'tier',
+          'emailVerified', 'admin', 'role'
+        ])
+      );
+
+      // Deletion is strictly admin only
+      allow delete: if isAdmin();
     }
 
-    // Transactions: Read only by the owner, created only via Cloud Functions/Admin
+    // Transactions Collection (Immutable ledger - written only by Cloud Functions / Admin)
     match /transactions/{txId} {
-      allow read: if request.auth != null && (resource.data.uid == request.auth.uid || request.auth.token.admin == true);
-      allow write: if false; // Server-side only
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
     }
 
-    // Withdrawals: Read own withdrawals, create permitted if authenticated, updates server-side only
+    // Withdrawals Collection
     match /withdrawals/{wdId} {
-      allow read: if request.auth != null && (resource.data.uid == request.auth.uid || request.auth.token.admin == true);
-      allow write: if false; // Server-side only
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
     }
 
-    // Leaderboard & Quizzes: Publicly readable by authenticated users
-    match /leaderboard/{period}/users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if false;
+    // Spins Collection (Immutable spin history)
+    match /spins/{spinId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
     }
 
-    match /quizzes/{quizId}/questions/{qId} {
-      allow read: if request.auth != null;
-      allow write: if false;
+    // Audit Logs Collection (Admin audit trail only)
+    match /auditLogs/{logId} {
+      allow read, write: if isAdmin();
     }
 
-    // App Config: Read-only for clients
-    match /config/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if false;
+    // Admin Users Collection
+    match /adminUsers/{adminId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Settings Collection (Financial rules, rates, limits)
+    match /settings/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
   }
 }
