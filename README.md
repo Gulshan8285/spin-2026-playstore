@@ -6,15 +6,20 @@ A high-performance Android rewards and entertainment application built natively 
 
 | Service | Link | Description |
 | :--- | :--- | :--- |
-| 🖥️ **Live Web Admin Panel** | [**Open Admin Dashboard**](https://gulshan8285.github.io/spin-2026-playstore/) | Free GitHub Pages hosted web admin console |
-Admin - password - SpinWin@2026
-
-| 📲 **Download Latest APK** | [**SpinWinRewards.apk (v1.0.0)**](https://github.com/Gulshan8285/spin-2026-playstore/releases/latest/download/SpinWinRewards.apk) | Direct Android installation package (~1.8 MB) |
-| 📦 **Download Play Store AAB** | [**SpinWinRewards.aab (v1.0.0)**](https://github.com/Gulshan8285/spin-2026-playstore/releases/latest/download/SpinWinRewards.aab) | Google Play Store App Bundle (~3.6 MB) |
-| 🔖 **All Releases & Versions** | [**GitHub Releases Hub**](https://github.com/Gulshan8285/spin-2026-playstore/releases) | Cloud backup of all builds (never lost) |
+| 🖥️ **Live Web Admin Panel** | [**Open Admin Dashboard**](https://gulshan8285.github.io/spin-2026-playstore/) | Real-time Firestore synchronized web admin console |
+| 🔑 **Admin Credentials** | `Password: SpinWin@2026` | Live access to users, balances, and payouts |
+| 📲 **Download Latest APK** | [**SpinWinRewards.apk (v1.0.2)**](https://github.com/Gulshan8285/spin-2026-playstore/releases/download/v1.0.2/SpinWinRewards.apk) | Direct Android release package (~3.5 MB) |
+| 📦 **Download Play Store AAB** | [**SpinWinRewards.aab (v1.0.2)**](https://github.com/Gulshan8285/spin-2026-playstore/releases/download/v1.0.2/SpinWinRewards.aab) | Google Play Store App Bundle (~6.5 MB) |
+| 🔖 **All Releases & Versions** | [**GitHub Releases Hub**](https://github.com/Gulshan8285/spin-2026-playstore/releases) | Versioned signed builds and release notes |
 
 ---
 
+## ⚡ Key Highlights & Architecture
+
+- **Real Production Firebase Backend**: Fully connected to `spin-game-3f38a` (Firebase Authentication + Cloud Firestore + Cloud Functions).
+- **Server-Authoritative Wallet & RNG**: Zero client-side point manipulation; wheel spins and withdrawal processing are computed on Google Cloud Functions.
+- **Real-time Synchronization**: Firestore snapshot listeners ensure that administrative point adjustments and withdrawal updates reflect instantly in the user's mobile app without refresh.
+- **Strict Security Rules**: Custom `firestore.rules` preventing unauthorized writes to points, balances, or status fields.
 - **Exclusive Google Sign-In**: Instant OAuth 2.0 authentication with real profile synchronization.
 - **Dynamic Worldwide Currency & Localization**: Automatic region detection and worldwide country calling codes with real-time multi-currency conversion ($ USD, £ GBP, € EUR, ₹ INR, etc.).
 - **Interactive Lucky Spin Wheel**: Canvas-rendered, physics-based smooth decel spin animation with haptics, celebratory audio, and confetti.
