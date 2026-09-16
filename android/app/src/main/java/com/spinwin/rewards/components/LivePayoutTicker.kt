@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.spinwin.rewards.theme.BorderGlass
@@ -119,20 +120,26 @@ fun LivePayoutTicker(
                     },
                     label = "liveTickerAnim"
                 ) { notice ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
                         Text(
                             text = "🎉 ${notice.name}",
                             color = Color.White,
                             fontFamily = SoraFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "withdrew",
                             color = Color.White.copy(alpha = 0.65f),
                             fontFamily = InterFamily,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            maxLines = 1
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
@@ -140,7 +147,8 @@ fun LivePayoutTicker(
                             color = Gold,
                             fontFamily = SoraFamily,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            maxLines = 1
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
@@ -148,17 +156,22 @@ fun LivePayoutTicker(
                             color = Emerald,
                             fontFamily = InterFamily,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
 
+            Spacer(modifier = Modifier.width(6.dp))
+
             Text(
                 text = currentNotice.timeAgo,
                 color = Color.White.copy(alpha = 0.45f),
                 fontFamily = InterFamily,
-                fontSize = 10.sp
+                fontSize = 10.sp,
+                maxLines = 1
             )
         }
     }

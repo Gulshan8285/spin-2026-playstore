@@ -21,9 +21,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -41,6 +44,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.spinwin.rewards.audio.SoundManager
 import com.spinwin.rewards.components.AuroraBackground
 import com.spinwin.rewards.components.CountryCodeButton
@@ -93,30 +97,38 @@ fun AuthScreen(
         try {
             val account = task.getResult(ApiException::class.java)
             if (account != null) {
-                pendingName = account.displayName ?: ""
-                pendingEmail = account.email ?: ""
-                pendingPhotoUrl = account.photoUrl?.toString() ?: ""
-                pendingPhone = ""
-                pendingAge = ""
+                val email = account.email ?: ""
+                val name = account.displayName ?: ""
+                val photo = account.photoUrl?.toString() ?: ""
+                viewModel.prepareUserSignIn(email, name, photo)
+                pendingName = name
+                pendingEmail = email
+                pendingPhotoUrl = photo
+                pendingPhone = viewModel.cachedPhone
+                pendingAge = viewModel.cachedAge.ifBlank { "21" }
                 showProfileDialog = true
             } else {
                 Toast.makeText(context, "Sign-in cancelled. Please tap Sign in with Google.", Toast.LENGTH_SHORT).show()
             }
         } catch (e: ApiException) {
-            // If Google API encounters an issue (e.g. SHA-1 or Play Services on friend's device),
-            // still open the profile dialog so the user can enter their real details without being blocked.
-            pendingName = ""
-            pendingEmail = ""
-            pendingPhotoUrl = ""
-            pendingPhone = ""
-            pendingAge = ""
-            showProfileDialog = true
+            if (e.statusCode == com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes.SIGN_IN_CANCELLED || e.statusCode == 12501) {
+                // User intentionally cancelled or pressed back
+                Toast.makeText(context, "Sign-in cancelled", Toast.LENGTH_SHORT).show()
+            } else {
+                // If Google API encounters an issue, let user enter their details manually
+                pendingName = ""
+                pendingEmail = ""
+                pendingPhotoUrl = ""
+                pendingPhone = viewModel.cachedPhone
+                pendingAge = viewModel.cachedAge.ifBlank { "21" }
+                showProfileDialog = true
+            }
         } catch (e: Exception) {
             pendingName = ""
             pendingEmail = ""
             pendingPhotoUrl = ""
-            pendingPhone = ""
-            pendingAge = ""
+            pendingPhone = viewModel.cachedPhone
+            pendingAge = viewModel.cachedAge.ifBlank { "21" }
             showProfileDialog = true
         }
     }
@@ -125,7 +137,8 @@ fun AuthScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -158,12 +171,12 @@ fun AuthScreen(
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(36.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Main Auth Card — ONLY Google Sign In
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
-                    modifier = Modifier.padding(26.dp),
+                    modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
@@ -274,31 +287,55 @@ fun AuthScreen(
         }
 
         // =====================================================================
-        // STEP 2: PROFILE DETAILS DIALOG (NAME, MOBILE NUMBER, AGE)
+        // STEP 2: PROFILE DETAILS FORM (NAME, EMAIL, MOBILE NUMBER, AGE)
         // Opens immediately after Google Sign-In to complete real registration
         // =====================================================================
         if (showProfileDialog) {
-            Dialog(onDismissRequest = { /* Non-dismissible: user must complete details */ }) {
+            Dialog(
+                onDismissRequest = { showProfileDialog = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .fillMaxWidth(0.92f)
                         .clip(RoundedCornerShape(24.dp))
                         .background(Color(0xFF161622))
                         .border(1.dp, BorderGlass, RoundedCornerShape(24.dp))
-                        .padding(22.dp)
+                        .padding(20.dp)
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(PrimaryGradient),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = "👤", fontSize = 28.sp)
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(CircleShape)
+                                    .background(PrimaryGradient),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "👤", fontSize = 22.sp)
+                            }
+
+                            IconButton(
+                                onClick = { showProfileDialog = false },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Text(
+                                    text = "✕",
+                                    color = TextSecondary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
 
                         Text(
@@ -310,22 +347,32 @@ fun AuthScreen(
                         )
 
                         Text(
-                            text = if (pendingEmail.isNotBlank()) "Connected with: $pendingEmail\nPlease enter your real name, number & age:" else "Please enter your real name, phone & age for UPI payouts:",
+                            text = "Verify your Name, Email & Mobile Number for instant UPI withdrawals:",
                             color = TextSecondary,
                             fontFamily = InterFamily,
                             fontSize = 12.sp,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
 
-                        // Real Full Name (Pre-filled from Google, or entered by user — NO DEMO NAME)
+                        // 1. Full Legal Name (Pre-filled from Google, or entered by user)
                         GlassTextField(
                             value = pendingName,
                             onValueChange = { pendingName = it },
-                            label = "Full Legal Name",
-                            placeholder = "Enter your full legal name"
+                            label = "Full Name",
+                            placeholder = "Enter your full name",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
                         )
 
-                        // Phone Number with Country Code (+91 default)
+                        // 2. Email Address (Pre-filled from Google, editable)
+                        GlassTextField(
+                            value = pendingEmail,
+                            onValueChange = { pendingEmail = it },
+                            label = "Email Address",
+                            placeholder = "name@gmail.com",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                        )
+
+                        // 3. Phone Number with Country Code (+91 default)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.Bottom,
@@ -346,7 +393,7 @@ fun AuthScreen(
                             )
                         }
 
-                        // Age (Blank by default — NO DEMO DEFAULT)
+                        // 4. Age
                         GlassTextField(
                             value = pendingAge,
                             onValueChange = { pendingAge = it },
@@ -359,14 +406,20 @@ fun AuthScreen(
 
                         // Complete Registration Button
                         PrimaryButton(
-                            text = "CREATE ACCOUNT & START PLAYING 🚀",
+                            text = "CREATE ACCOUNT & START 🚀",
+                            fontSize = 14.sp,
                             onClick = {
                                 val trimmedName = pendingName.trim()
+                                val trimmedEmail = pendingEmail.trim()
                                 val trimmedPhone = pendingPhone.trim()
                                 val trimmedAge = pendingAge.trim()
 
                                 if (trimmedName.isBlank()) {
-                                    Toast.makeText(context, "Please enter your full legal name", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Please enter your full name", Toast.LENGTH_SHORT).show()
+                                    return@PrimaryButton
+                                }
+                                if (trimmedEmail.isBlank() || !trimmedEmail.contains("@") || !trimmedEmail.contains(".")) {
+                                    Toast.makeText(context, "Please enter a valid email address", Toast.LENGTH_SHORT).show()
                                     return@PrimaryButton
                                 }
                                 if (trimmedPhone.length < 6) {
@@ -380,14 +433,14 @@ fun AuthScreen(
 
                                 viewModel.saveUserProfileDetails(
                                     name = trimmedName,
-                                    email = pendingEmail,
+                                    email = trimmedEmail,
                                     photoUrl = pendingPhotoUrl,
                                     phone = trimmedPhone,
                                     age = trimmedAge,
                                     countryCode = activeCountry.code,
                                     onSuccess = {
                                         soundManager.playWin()
-                                        Toast.makeText(context, "Welcome, $trimmedName! Your account starts with ₹0.00.", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "Welcome, $trimmedName! Your account is ready.", Toast.LENGTH_LONG).show()
                                         showProfileDialog = false
                                         onAuthSuccess()
                                     }

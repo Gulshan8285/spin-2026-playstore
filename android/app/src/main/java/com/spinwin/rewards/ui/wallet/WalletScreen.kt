@@ -20,8 +20,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
@@ -39,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.spinwin.rewards.audio.SoundManager
@@ -90,17 +93,17 @@ fun WalletScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Rewards Wallet",
                         color = TextPrimary,
                         fontFamily = SoraFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 28.sp
+                        fontSize = 24.sp
                     )
                 }
 
@@ -208,7 +211,7 @@ private fun HeroBalanceCard(
     currencySymbol: String = "$"
 ) {
     GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(22.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Text(
                 text = "AVAILABLE BALANCE",
                 color = TextSecondary,
@@ -224,9 +227,9 @@ private fun HeroBalanceCard(
                     color = TextPrimary,
                     fontFamily = SoraFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 38.sp
+                    fontSize = 32.sp
                 )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -275,22 +278,15 @@ private fun ConversionLiveCard(currencySymbol: String = "$") {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
-                    Text(
-                        text = "Reward Points Redemption Rate",
-                        color = TextPrimary,
-                        fontFamily = SoraFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = "1,000 Points = $currencySymbol" + "1.00 Cash • 100 Points = $currencySymbol" + "0.10",
-                        color = TextTertiary,
-                        fontFamily = InterFamily,
-                        fontSize = 12.sp
-                    )
-                }
+                Text(
+                    text = "Reward Points Redemption Rate",
+                    color = TextPrimary,
+                    fontFamily = SoraFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
@@ -302,10 +298,20 @@ private fun ConversionLiveCard(currencySymbol: String = "$") {
                         color = Emerald,
                         fontFamily = InterFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        maxLines = 1
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "1,000 Points = $currencySymbol" + "1.00 Cash • 100 Points = $currencySymbol" + "0.10",
+                color = TextTertiary,
+                fontFamily = InterFamily,
+                fontSize = 12.sp
+            )
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -367,9 +373,13 @@ private fun WithdrawModal(
             .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
             .background(Color(0xFF0F1626))
             .border(1.dp, BorderGlass, RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-            .padding(24.dp)
+            .padding(20.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -403,7 +413,7 @@ private fun WithdrawModal(
             // Method Selector
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 methods.forEach { method ->
                     val isSelected = method == selectedMethod
@@ -414,7 +424,7 @@ private fun WithdrawModal(
                             .background(if (isSelected) NeonPurple.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.05f))
                             .border(1.dp, if (isSelected) NeonPurple else BorderGlass, RoundedCornerShape(12.dp))
                             .clickable { selectedMethod = method }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 8.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -422,7 +432,9 @@ private fun WithdrawModal(
                             color = if (isSelected) TextPrimary else TextSecondary,
                             fontFamily = InterFamily,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp
+                            fontSize = 11.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

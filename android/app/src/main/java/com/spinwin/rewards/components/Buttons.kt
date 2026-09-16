@@ -33,7 +33,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.spinwin.rewards.audio.SoundManager
@@ -59,7 +61,9 @@ fun PrimaryButton(
     gradient: Brush = PrimaryGradient,
     glowColor: Color = NeonPurple,
     leadingIcon: (@Composable () -> Unit)? = null,
-    trailingIcon: (@Composable () -> Unit)? = null
+    trailingIcon: (@Composable () -> Unit)? = null,
+    fontSize: TextUnit = 15.sp,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp)
 ) {
     val context = LocalContext.current
     val soundManager = remember { SoundManager.getInstance(context) }
@@ -99,21 +103,23 @@ fun PrimaryButton(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 24.dp)
+            modifier = Modifier.padding(contentPadding)
         ) {
             leadingIcon?.invoke()
-            if (leadingIcon != null) Spacer(modifier = Modifier.width(8.dp))
+            if (leadingIcon != null) Spacer(modifier = Modifier.width(6.dp))
 
             Text(
                 text = text,
                 color = if (enabled) TextPrimary else Color.White.copy(alpha = 0.5f),
                 fontFamily = InterFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                letterSpacing = 0.2.sp
+                fontSize = fontSize,
+                letterSpacing = 0.2.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
-            if (trailingIcon != null) Spacer(modifier = Modifier.width(8.dp))
+            if (trailingIcon != null) Spacer(modifier = Modifier.width(6.dp))
             trailingIcon?.invoke()
         }
     }
@@ -129,7 +135,9 @@ fun SecondaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    leadingIcon: (@Composable () -> Unit)? = null
+    leadingIcon: (@Composable () -> Unit)? = null,
+    fontSize: TextUnit = 14.sp,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp)
 ) {
     val context = LocalContext.current
     val soundManager = remember { SoundManager.getInstance(context) }
@@ -162,16 +170,18 @@ fun SecondaryButton(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 20.dp)
+            modifier = Modifier.padding(contentPadding)
         ) {
             leadingIcon?.invoke()
-            if (leadingIcon != null) Spacer(modifier = Modifier.width(8.dp))
+            if (leadingIcon != null) Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = text,
                 color = TextPrimary,
                 fontFamily = InterFamily,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp
+                fontSize = fontSize,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

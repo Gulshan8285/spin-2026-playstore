@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -181,7 +182,7 @@ fun CountryPickerDialog(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 360.dp),
+                        .heightIn(max = 260.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(filteredCountries, key = { it.code }) { country ->
@@ -200,20 +201,24 @@ fun CountryPickerDialog(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(text = country.flag, fontSize = 22.sp)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
                                     Text(
                                         text = country.name,
                                         color = TextPrimary,
                                         fontFamily = InterFamily,
                                         fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.sp
+                                        fontSize = 13.5.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
                                         text = "Currency: ${country.currencyCode} (${country.currencySymbol})",
                                         color = TextTertiary,
                                         fontFamily = InterFamily,
-                                        fontSize = 11.sp
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }

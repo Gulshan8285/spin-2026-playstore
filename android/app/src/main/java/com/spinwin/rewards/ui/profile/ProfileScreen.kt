@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -93,15 +95,15 @@ fun ProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Avatar with gradient border
             Box(
                 modifier = Modifier
-                    .size(88.dp)
+                    .size(78.dp)
                     .clip(CircleShape)
                     .border(3.dp, PrimaryGradient, CircleShape)
                     .background(SurfaceElevated),
@@ -177,7 +179,7 @@ fun ProfileScreen(
 
             // User Profile Details Card (Name, Mobile, Age)
             GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -415,7 +417,10 @@ fun ProfileScreen(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
                     ) {
                         Text(
                             text = "Edit Profile Details",
@@ -527,31 +532,44 @@ private fun ProfileDetailItem(
             .then(
                 if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
             )
-            .padding(horizontal = 14.dp, vertical = 11.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = emoji, fontSize = 16.sp)
-            Spacer(modifier = Modifier.width(10.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(0.42f, fill = false)
+        ) {
+            Text(text = emoji, fontSize = 15.sp)
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = label,
                 color = TextSecondary,
                 fontFamily = InterFamily,
-                fontSize = 13.sp
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Spacer(modifier = Modifier.width(8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
+            modifier = Modifier.weight(0.58f, fill = false)
+        ) {
             Text(
                 text = value,
                 color = TextPrimary,
                 fontFamily = SoraFamily,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp
+                fontSize = 12.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.End
             )
             if (onClick != null) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(text = "›", color = NeonPurple, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(text = "›", color = NeonPurple, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

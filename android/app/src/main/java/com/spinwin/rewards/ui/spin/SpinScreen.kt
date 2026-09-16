@@ -81,10 +81,10 @@ fun SpinScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Title Header
                 Text(
@@ -92,19 +92,19 @@ fun SpinScreen(
                     color = TextPrimary,
                     fontFamily = SoraFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 28.sp
+                    fontSize = 22.sp
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     text = "Spin daily to win up to 100 reward points!",
                     color = TextSecondary,
                     fontFamily = InterFamily,
-                    fontSize = 14.sp
+                    fontSize = 12.5.sp
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Interactive Spin Wheel
+                // Interactive Spin Wheel (compact 265dp)
                 SpinWheelCanvas(
                     isSpinning = isSpinning,
                     targetSegmentIndex = targetIndex,
@@ -122,7 +122,7 @@ fun SpinScreen(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(26.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Spins Left Pill & Timer
                 Row(
@@ -130,7 +130,7 @@ fun SpinScreen(
                         .clip(RoundedCornerShape(20.dp))
                         .background(Color.White.copy(alpha = 0.06f))
                         .border(1.dp, BorderGlass, RoundedCornerShape(20.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -138,18 +138,18 @@ fun SpinScreen(
                         color = Gold,
                         fontFamily = InterFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = 12.sp
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "•  Next free spin in 24:33",
                         color = TextTertiary,
                         fontFamily = InterFamily,
-                        fontSize = 12.sp
+                        fontSize = 11.sp
                     )
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Main Spin Action Button (Neumorphic Glow)
                 PrimaryButton(
@@ -162,47 +162,51 @@ fun SpinScreen(
                             Toast.makeText(context, "No spins remaining! Watch an ad to get +1 spin.", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(0.85f)
+                    modifier = Modifier.fillMaxWidth(0.9f)
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // Row of 3 Action Buttons (Highlighted Watch Ad)
+                // Row of 2 Action Buttons (Highlighted Watch Ad)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Watch Video +1 Spin & +100 Pts
                     PrimaryButton(
-                        text = "▶ Watch Video (+100 Pts)",
+                        text = "▶ Watch Video (+100)",
                         gradient = GoldGradient,
                         glowColor = Gold,
+                        fontSize = 13.sp,
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
                         onClick = {
                             viewModel.watchAdForSpin {
                                 soundManager.playBigWin()
                                 Toast.makeText(context, "+100 Reward Points added via Video!", Toast.LENGTH_SHORT).show()
                             }
                         },
-                        modifier = Modifier.weight(1.3f)
+                        modifier = Modifier.weight(1.2f)
                     )
 
                     // Invite +3 Spins
                     SecondaryButton(
                         text = "Invite (+3)",
+                        fontSize = 13.sp,
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
                         onClick = {
                             soundManager.playButtonTap()
                             Toast.makeText(context, "Share referral to unlock +3 spins!", Toast.LENGTH_SHORT).show()
                         },
-                        modifier = Modifier.weight(0.9f)
+                        modifier = Modifier.weight(0.8f)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // 💰 UNREWARDED BANNER AD (100% Pure Developer Revenue)
                 com.spinwin.rewards.components.AdmobBanner()
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             // Confetti Burst & Flying Coins

@@ -68,7 +68,7 @@ fun SpinWheelCanvas(
     isSpinning: Boolean,
     targetSegmentIndex: Int,
     onSpinFinished: (WheelSegment) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.size(265.dp),
     segments: List<WheelSegment> = defaultWheelSegments
 ) {
     val context = LocalContext.current
@@ -121,7 +121,6 @@ fun SpinWheelCanvas(
 
     Box(
         modifier = modifier
-            .size(320.dp)
             .drawBehind {
                 // Background radial glow
                 drawCircle(
@@ -186,7 +185,7 @@ fun SpinWheelCanvas(
                         drawIntoCanvas { canvas ->
                             val textPaint = Paint().apply {
                                 color = android.graphics.Color.WHITE
-                                textSize = 13.dp.toPx()
+                                textSize = 11.5f.dp.toPx()
                                 isAntiAlias = true
                                 textAlign = Paint.Align.RIGHT
                                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -194,8 +193,8 @@ fun SpinWheelCanvas(
                             }
                             canvas.nativeCanvas.drawText(
                                 seg.title,
-                                size.width - 24.dp.toPx(),
-                                radius + 5.dp.toPx(),
+                                size.width - 20.dp.toPx(),
+                                radius + 4.dp.toPx(),
                                 textPaint
                             )
                         }
@@ -204,13 +203,13 @@ fun SpinWheelCanvas(
             }
 
             // Center Hub (Gold Coin with App Crown Logo)
-            drawCenterHub(centerOffset, 38.dp.toPx())
+            drawCenterHub(centerOffset, (radius * 0.23f).coerceIn(26.dp.toPx(), 36.dp.toPx()))
         }
 
         // Top Pointer (Gold glowing triangle pointing DOWN at 12 o'clock)
         PointerIndicator(
             modifier = Modifier
-                .size(34.dp)
+                .size(30.dp)
                 .align(Alignment.TopCenter)
         )
     }

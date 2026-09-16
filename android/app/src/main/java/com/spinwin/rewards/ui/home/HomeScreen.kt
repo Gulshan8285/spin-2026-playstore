@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -103,8 +104,8 @@ fun HomeScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
                 Spacer(modifier = Modifier.height(14.dp))
@@ -342,11 +343,13 @@ private fun HomeHeader(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable(onClick = onAvatarClick)
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .clickable(onClick = onAvatarClick)
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(42.dp)
                     .clip(CircleShape)
                     .border(2.dp, PrimaryGradient, CircleShape)
                     .background(SurfaceElevated),
@@ -363,20 +366,24 @@ private fun HomeHeader(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            Column {
+            Column(modifier = Modifier.weight(1f, fill = false)) {
                 Text(
                     text = "Hello, $userName 👋",
                     color = Color.White,
                     fontFamily = SoraFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = "Level: $tierName • Active Earner",
                     color = Gold,
                     fontFamily = InterFamily,
                     fontWeight = FontWeight.Medium,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -467,49 +474,57 @@ private fun HighEarningAdCard(onWatchAd: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(GoldGradient)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "⚡ TOP REWARDS",
-                            color = Color.Black,
-                            fontFamily = SoraFamily,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 11.sp,
-                            letterSpacing = 0.8.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(GoldGradient)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
                     Text(
-                        text = "🔥 30+ AVAILABLE DAILY",
-                        color = Emerald,
-                        fontFamily = InterFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
+                        text = "⚡ TOP REWARDS",
+                        color = Color.Black,
+                        fontFamily = SoraFamily,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp,
+                        letterSpacing = 0.8.sp
                     )
                 }
 
-                Text(
-                    text = "🪙 +100 PTS EACH",
-                    color = Gold,
-                    fontFamily = SoraFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Gold.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "🪙 +100 PTS EACH",
+                        color = Gold,
+                        fontFamily = SoraFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        maxLines = 1
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "🔥 30+ AVAILABLE DAILY",
+                color = Emerald,
+                fontFamily = InterFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = "Watch Sponsored Videos (Bonus Points)",
                 color = TextPrimary,
                 fontFamily = SoraFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
+                fontSize = 17.sp
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -523,7 +538,7 @@ private fun HighEarningAdCard(onWatchAd: () -> Unit) {
             Spacer(modifier = Modifier.height(14.dp))
 
             PrimaryButton(
-                text = "▶ WATCH VIDEO (+100 PTS) • WATCH AGAIN",
+                text = "▶ WATCH VIDEO (+100 PTS)",
                 gradient = GoldGradient,
                 glowColor = Gold,
                 onClick = onWatchAd
@@ -556,8 +571,12 @@ private fun HowToEarnGuideCard(
                     color = TextPrimary,
                     fontFamily = SoraFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+                Spacer(modifier = Modifier.width(6.dp))
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
@@ -813,10 +832,10 @@ private fun QuickActionsRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        QuickActionButton("Spin Wheel", Icons.Default.Stars, PrimaryGradient, onSpinClick)
-        QuickActionButton("Quiz Arena", Icons.Default.Psychology, Brush.linearGradient(listOf(Color(0xFFFF7AC8), Color(0xFF7C4DFF))), onQuizClick)
-        QuickActionButton("Watch Ad", Icons.Default.PlayArrow, GoldGradient, onWatchAdClick)
-        QuickActionButton("Refer & Earn", Icons.Default.Share, Brush.linearGradient(listOf(Color(0xFF00D1FF), Color(0xFF00E676))), onReferClick)
+        QuickActionButton("Spin Wheel", Icons.Default.Stars, PrimaryGradient, onSpinClick, Modifier.weight(1f))
+        QuickActionButton("Quiz Arena", Icons.Default.Psychology, Brush.linearGradient(listOf(Color(0xFFFF7AC8), Color(0xFF7C4DFF))), onQuizClick, Modifier.weight(1f))
+        QuickActionButton("Watch Ad", Icons.Default.PlayArrow, GoldGradient, onWatchAdClick, Modifier.weight(1f))
+        QuickActionButton("Refer & Earn", Icons.Default.Share, Brush.linearGradient(listOf(Color(0xFF00D1FF), Color(0xFF00E676))), onReferClick, Modifier.weight(1f))
     }
 }
 
@@ -825,15 +844,16 @@ private fun QuickActionButton(
     label: String,
     icon: ImageVector,
     gradient: Brush,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
+        modifier = modifier.clickable(onClick = onClick)
     ) {
         Box(
             modifier = Modifier
-                .size(54.dp)
+                .size(50.dp)
                 .clip(CircleShape)
                 .background(gradient),
             contentAlignment = Alignment.Center
@@ -929,7 +949,7 @@ private fun DailyCheckInCard(streakDays: Int, onClaimClick: () -> Unit) {
                     val isCurrent = day == streakDays
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(33.dp)
                             .clip(CircleShape)
                             .then(
                                 when {

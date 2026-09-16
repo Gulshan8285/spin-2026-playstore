@@ -42,8 +42,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     val activeCountry: StateFlow<com.spinwin.rewards.data.model.CountryInfo> = repository.activeCountry
 
+    val cachedPhone: String get() = repository.userProfile.value.phone
+    val cachedAge: String get() = repository.userProfile.value.age
+
     fun selectCountry(country: com.spinwin.rewards.data.model.CountryInfo) {
         repository.updateCountry(country)
+    }
+
+    fun prepareUserSignIn(email: String, name: String, photoUrl: String = "") {
+        if (email.isNotBlank()) {
+            repository.onUserSignIn(email, name, photoUrl)
+        }
     }
 
     fun saveUserProfileDetails(
@@ -58,10 +67,13 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _authState.value = AuthState.LOADING
             if (email.isNotBlank()) {
-                repository.updateGoogleUser(name, email, photoUrl)
+                repository.onUserSignIn(email, name, photoUrl)
             }
-            repository.updateUserDetails(name, phone, age, countryCode)
-            authPrefs.edit().putBoolean("is_logged_in", true).apply()
+            repository.updateUserDetails(name, phone, age, countryCode, email)
+            authPrefs.edit()
+                .putBoolean("is_logged_in", true)
+                .putString("logged_in_email", email.trim().lowercase())
+                .apply()
             _authState.value = AuthState.AUTHENTICATED
             _errorMessage.value = null
             onSuccess()
@@ -74,6 +86,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun logout() {
+        repository.onLogout()
         authPrefs.edit().clear().apply()
         _authState.value = AuthState.UNAUTHENTICATED
         try {

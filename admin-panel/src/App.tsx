@@ -1,10 +1,30 @@
 import { useState, useEffect } from 'react';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  getFirestore,
+  collection,
+  onSnapshot,
+  doc,
+  updateDoc
+} from 'firebase/firestore';
 import {
   Users, CheckCircle,
   Settings, AlertCircle, Eye, EyeOff, RotateCw, LogOut, ShieldCheck,
   Bell, Send, Edit3, Smartphone, Save,
   FileText, Gift, RefreshCw
 } from 'lucide-react';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBt1gPq8dxTh1xSJkkte3WRtSj_w2y_iNw",
+  authDomain: "spin-game-3f38a.firebaseapp.com",
+  projectId: "spin-game-3f38a",
+  storageBucket: "spin-game-3f38a.firebasestorage.app",
+  messagingSenderId: "888376316097",
+  appId: "1:888376316097:android:f2ea36e3465197cec14440"
+};
+
+const firebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+const firestoreDb = getFirestore(firebaseApp);
 
 interface Withdrawal {
   id: string;
@@ -127,10 +147,12 @@ export default function App() {
   };
 
   // =========================================================================
-  // 👥 4. ONLY 1 REAL DOWNLOADED USER (NO FAKE/TEST DATA)
   // =========================================================================
-  // User stated: "shrif 1 ka phoen ma hi downloa d hoa or vo tum find kro, real point vo dikha,
-  // uska upi id dikha, agar 0 point hai tho pasa bhi 0 hi aay"
+  // 👥 4. LIVE FIRESTORE USERS & REAL-TIME LEDGER
+  // =========================================================================
+  const [firestoreStatus, setFirestoreStatus] = useState<'connected' | 'connecting' | 'error'>('connecting');
+  const [firestoreErrorMsg, setFirestoreErrorMsg] = useState<string | null>(null);
+
   const [users, setUsers] = useState<UserItem[]>(() => {
     const saved = localStorage.getItem('spinwin_real_users');
     if (saved) {
@@ -157,6 +179,52 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('spinwin_real_users', JSON.stringify(users));
   }, [users]);
+
+  // Real-time Firestore Users Listener
+  useEffect(() => {
+    let unsubscribeUsers: (() => void) | undefined;
+    try {
+      const usersCol = collection(firestoreDb, 'users');
+      unsubscribeUsers = onSnapshot(usersCol, (snapshot) => {
+        if (!snapshot.empty) {
+          const liveUsers: UserItem[] = snapshot.docs.map(docSnap => {
+            const data = docSnap.data();
+            const pts = Number(data.points) || 0;
+            return {
+              uid: data.uid || docSnap.id,
+              name: data.name || 'Player',
+              email: data.email || '—',
+              phone: data.phone || '—',
+              upiId: data.upiId || '—',
+              points: pts,
+              tier: (data.tier as any) || 'BRONZE',
+              referrals: Number(data.referrals) || 0,
+              status: (data.status === 'BANNED' ? 'BANNED' : 'ACTIVE') as 'ACTIVE' | 'BANNED',
+              deviceModel: data.deviceModel || 'Android Device',
+              registeredDate: data.registeredDate || 'Recent',
+              lastActive: data.lastActive || 'Active Now 🟢'
+            };
+          });
+          setUsers(liveUsers);
+          setFirestoreStatus('connected');
+          setFirestoreErrorMsg(null);
+        } else {
+          setFirestoreStatus('connected');
+        }
+      }, (err) => {
+        console.warn("Firestore users listener error:", err);
+        setFirestoreStatus('error');
+        setFirestoreErrorMsg(err.message);
+      });
+    } catch (err: any) {
+      setFirestoreStatus('error');
+      setFirestoreErrorMsg(err?.message || 'Firestore connection failed');
+    }
+
+    return () => {
+      if (unsubscribeUsers) unsubscribeUsers();
+    };
+  }, []);
 
   // Selected User for Editing
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
@@ -189,6 +257,18 @@ export default function App() {
     setUsers(updatedUsers);
     setEditingUser(null);
     showNotice(`✅ Updated user profile for ${editingUser.name}!`);
+
+    try {
+      const userRef = doc(firestoreDb, 'users', editingUser.uid);
+      updateDoc(userRef, {
+        points: pts,
+        balanceRupees: pts / config.pointsPerRupee,
+        upiId: editUpiInput.trim(),
+        phone: editPhoneInput.trim()
+      });
+    } catch (err) {
+      console.warn("Could not push update to Firestore:", err);
+    }
   };
 
   // --- WITHDRAWALS STATE (INDIAN RUPEES ONLY) ---
@@ -216,6 +296,40 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('spinwin_withdrawals_inr', JSON.stringify(withdrawals));
   }, [withdrawals]);
+
+  // Real-time Firestore Withdrawals Listener
+  useEffect(() => {
+    let unsubscribeWds: (() => void) | undefined;
+    try {
+      const wdCol = collection(firestoreDb, 'withdrawals');
+      unsubscribeWds = onSnapshot(wdCol, (snapshot) => {
+        if (!snapshot.empty) {
+          const liveWds: Withdrawal[] = snapshot.docs.map(docSnap => {
+            const data = docSnap.data();
+            return {
+              id: data.id || docSnap.id,
+              userName: data.userName || 'User',
+              uid: data.uid || '—',
+              amountINR: Number(data.amountINR) || 0,
+              pointsDeducted: Number(data.pointsDeducted) || 0,
+              method: (data.method === 'Bank Transfer' ? 'Bank Transfer' : 'UPI'),
+              upiId: data.upiId || '—',
+              status: data.status || 'pending',
+              time: data.time || 'Recent',
+              isRealUser: true
+            };
+          });
+          setWithdrawals(liveWds);
+        }
+      }, (err) => {
+        console.warn("Firestore withdrawals listener error:", err);
+      });
+    } catch (err) {}
+
+    return () => {
+      if (unsubscribeWds) unsubscribeWds();
+    };
+  }, []);
 
   const handleApproveWithdrawal = (id: string) => {
     setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, status: 'approved' } : w));
@@ -823,11 +937,33 @@ export default function App() {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', margin: 0 }}>
-                  Real Installed Phone & UPI Details
-                </h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', margin: 0 }}>
+                    Real Installed Phone & UPI Details ({users.length} Users)
+                  </h2>
+                  {firestoreStatus === 'connected' ? (
+                    <span style={{ fontSize: '11px', background: 'rgba(0, 230, 118, 0.15)', color: '#00E676', padding: '3px 8px', borderRadius: '20px', border: '1px solid rgba(0, 230, 118, 0.4)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#00E676' }}></span>
+                      Live Firestore Synced
+                    </span>
+                  ) : firestoreStatus === 'connecting' ? (
+                    <span style={{ fontSize: '11px', background: 'rgba(0, 209, 255, 0.15)', color: '#00D1FF', padding: '3px 8px', borderRadius: '20px', border: '1px solid rgba(0, 209, 255, 0.4)' }}>
+                      Connecting to Cloud Firestore...
+                    </span>
+                  ) : (
+                    <a
+                      href="https://console.firebase.google.com/project/spin-game-3f38a/firestore"
+                      target="_blank"
+                      rel="noreferrer"
+                      title={firestoreErrorMsg || 'Click to create Firestore database'}
+                      style={{ fontSize: '11px', background: 'rgba(255, 197, 66, 0.15)', color: '#FFC542', padding: '3px 8px', borderRadius: '20px', border: '1px solid rgba(255, 197, 66, 0.4)', textDecoration: 'none' }}
+                    >
+                      ⚠️ Enable Firestore in Firebase Console
+                    </a>
+                  )}
+                </div>
                 <p style={{ fontSize: '13px', color: '#6B7A99', margin: '4px 0 0 0' }}>
-                  Filter active: All demo / fake users removed. Showing strictly the real installed device, registered UPI ID & exact points.
+                  Live synchronized users with real-time points, UPI VPAs & instant cash ledger.
                 </p>
               </div>
 
@@ -840,7 +976,7 @@ export default function App() {
                 }}
               >
                 <RefreshCw size={15} />
-                Refresh Device State
+                Refresh State
               </button>
             </div>
 

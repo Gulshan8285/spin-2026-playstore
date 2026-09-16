@@ -24,7 +24,9 @@ data class UserProfile(
     val validThru: String = "12/28",
     val cvv: String = "689",
     val age: String = "",
-    val countryCode: String = "IN"
+    val countryCode: String = "IN",
+    val upiId: String = "",
+    val status: String = "ACTIVE"
 )
 
 data class TransactionRecord(

@@ -12,6 +12,7 @@ import com.spinwin.rewards.data.model.QuizQuestion
 import com.spinwin.rewards.data.model.TransactionRecord
 import com.spinwin.rewards.data.model.UserProfile
 import com.spinwin.rewards.data.model.WithdrawalRequest
+import com.spinwin.rewards.data.remote.FirestoreSyncManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,17 +61,19 @@ class RewardsRepository(context: Context) {
     val activeCountry: StateFlow<CountryInfo> = _activeCountry.asStateFlow()
 
     init {
-        val cached = cacheManager.getUserProfile()
+        val activeEmail = cacheManager.getActiveEmail()
+        val cached = if (activeEmail != null) cacheManager.getUserProfile(activeEmail) else null
         if (cached != null) {
             _userProfile.value = cached
             _activeCountry.value = CountryRegistry.findByCode(cached.countryCode)
+            _transactions.value = cacheManager.getCachedTransactions(activeEmail)
+            FirestoreSyncManager.syncUser(cached)
         } else {
             val detected = CountryRegistry.detectDefaultCountry()
             _userProfile.value = _userProfile.value.copy(countryCode = detected.code)
             _activeCountry.value = detected
+            _transactions.value = emptyList()
         }
-        val cachedTx = cacheManager.getCachedTransactions()
-        _transactions.value = cachedTx
     }
 
     fun creditPoints(points: Int, title: String, emoji: String = "🪙", type: String = "reward", explicitCashRupees: Double? = null) {
@@ -93,6 +96,7 @@ class RewardsRepository(context: Context) {
         )
         _userProfile.value = updated
         cacheManager.saveUserProfile(updated)
+        FirestoreSyncManager.syncUser(updated)
 
         val tx = TransactionRecord(
             txId = "tx_" + UUID.randomUUID().toString().take(8),
@@ -107,7 +111,7 @@ class RewardsRepository(context: Context) {
         )
         val updatedList = listOf(tx) + _transactions.value
         _transactions.value = updatedList
-        cacheManager.cacheTransactions(updatedList)
+        cacheManager.cacheTransactions(updatedList, current.email)
     }
 
     fun recordSpin(pointsWon: Int) {
@@ -175,7 +179,11 @@ class RewardsRepository(context: Context) {
         val updatedBalance = current.balanceRupees - amountRupees
         val updatedPoints = (current.points - pointsDeducted).coerceAtLeast(0)
 
-        val updatedUser = current.copy(points = updatedPoints, balanceRupees = updatedBalance)
+        val updatedUser = current.copy(
+            points = updatedPoints,
+            balanceRupees = updatedBalance,
+            upiId = if (method == "UPI" || upiOrBank.contains("@")) upiOrBank.trim() else current.upiId
+        )
         _userProfile.value = updatedUser
         cacheManager.saveUserProfile(updatedUser)
 
@@ -190,6 +198,9 @@ class RewardsRepository(context: Context) {
             requestedAt = System.currentTimeMillis()
         )
 
+        FirestoreSyncManager.syncWithdrawal(req, updatedUser.name)
+        FirestoreSyncManager.syncUser(updatedUser)
+
         val tx = TransactionRecord(
             txId = req.wdId,
             uid = current.uid,
@@ -201,9 +212,59 @@ class RewardsRepository(context: Context) {
             timestamp = System.currentTimeMillis(),
             iconEmoji = "💸"
         )
-        _transactions.value = listOf(tx) + _transactions.value
+        val updatedTx = listOf(tx) + _transactions.value
+        _transactions.value = updatedTx
+        cacheManager.cacheTransactions(updatedTx, current.email)
 
         return Result.success(req)
+    }
+
+    fun onUserSignIn(email: String, name: String, photoUrl: String = ""): UserProfile {
+        val existing = cacheManager.getUserProfile(email)
+        val profile = if (existing != null && existing.email.isNotBlank()) {
+            // Returning user - restore their points and balance
+            val restored = existing.copy(
+                name = if (name.isNotBlank()) name else existing.name,
+                photoUrl = if (photoUrl.isNotBlank()) photoUrl else existing.photoUrl
+            )
+            cacheManager.saveUserProfile(restored)
+            restored
+        } else {
+            // BRAND NEW USER - STRICT 0 POINTS AND ₹0.00 CASH!
+            cacheManager.createNewUserProfile(
+                email = email,
+                name = name,
+                photoUrl = photoUrl
+            )
+        }
+
+        _userProfile.value = profile
+        _activeCountry.value = CountryRegistry.findByCode(profile.countryCode)
+        _transactions.value = cacheManager.getCachedTransactions(email)
+        FirestoreSyncManager.syncUser(profile)
+        return profile
+    }
+
+    fun onLogout() {
+        cacheManager.clearActiveSession()
+        _userProfile.value = UserProfile(
+            uid = "user_new",
+            name = "",
+            email = "",
+            phone = "",
+            points = 0,
+            balanceRupees = 0.0,
+            tier = UserTier.BRONZE,
+            referralCode = "SPIN8829",
+            spinsToday = 0,
+            maxDailySpins = 10,
+            streakDays = 1,
+            age = "",
+            countryCode = "IN",
+            upiId = "",
+            status = "ACTIVE"
+        )
+        _transactions.value = emptyList()
     }
 
     fun updateCountry(country: CountryInfo) {
@@ -212,6 +273,7 @@ class RewardsRepository(context: Context) {
         val updated = current.copy(countryCode = country.code)
         _userProfile.value = updated
         cacheManager.saveUserProfile(updated)
+        FirestoreSyncManager.syncUser(updated)
     }
 
     fun updateGoogleUser(name: String, email: String, photoUrl: String) {
@@ -223,6 +285,7 @@ class RewardsRepository(context: Context) {
         )
         _userProfile.value = updated
         cacheManager.saveUserProfile(updated)
+        FirestoreSyncManager.syncUser(updated)
     }
 
     fun updateUserName(newName: String) {
@@ -231,13 +294,15 @@ class RewardsRepository(context: Context) {
         val updated = current.copy(name = newName.trim())
         _userProfile.value = updated
         cacheManager.saveUserProfile(updated)
+        FirestoreSyncManager.syncUser(updated)
     }
 
-    fun updateUserDetails(name: String, phone: String, age: String, countryCode: String? = null) {
+    fun updateUserDetails(name: String, phone: String, age: String, countryCode: String? = null, email: String? = null) {
         val current = _userProfile.value
         val cCode = countryCode ?: current.countryCode
         val updated = current.copy(
             name = if (name.isNotBlank()) name.trim() else current.name,
+            email = if (!email.isNullOrBlank()) email.trim() else current.email,
             phone = if (phone.isNotBlank()) phone.trim() else current.phone,
             age = if (age.isNotBlank()) age.trim() else current.age,
             countryCode = cCode
@@ -245,6 +310,7 @@ class RewardsRepository(context: Context) {
         _userProfile.value = updated
         _activeCountry.value = CountryRegistry.findByCode(cCode)
         cacheManager.saveUserProfile(updated)
+        FirestoreSyncManager.syncUser(updated)
     }
 
     fun getLeaderboard(): List<LeaderboardUser> {

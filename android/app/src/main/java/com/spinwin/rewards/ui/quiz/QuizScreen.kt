@@ -20,8 +20,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -97,7 +99,7 @@ private fun CategorySelectView(viewModel: QuizViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp)
+            .padding(horizontal = 16.dp)
     ) {
         Spacer(modifier = Modifier.height(18.dp))
 
@@ -318,7 +320,8 @@ private fun QuizPlayView(viewModel: QuizViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(14.dp))
@@ -556,8 +559,9 @@ private fun QuizResultView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 80.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 60.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -632,7 +636,7 @@ private fun QuizResultView(
 
         if (!hasClaimedDouble && totalEarnedPts > 0) {
             PrimaryButton(
-                text = "▶ WATCH VIDEO TO DOUBLE (2X REWARD) ⚡",
+                text = "▶ 2X REWARD: WATCH VIDEO ⚡",
                 gradient = GoldGradient,
                 glowColor = Gold,
                 onClick = {
