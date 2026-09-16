@@ -101,13 +101,20 @@ fun AdmobBanner(
                         this.adUnitId = adUnitId
                         adListener = object : AdListener() {
                             override fun onAdLoaded() {
-                                Log.d("AdmobBanner", "✅ Banner ad loaded successfully")
+                                Log.d("AdmobBanner", "✅ Banner ad loaded! UnitId=$adUnitId")
                             }
                             override fun onAdFailedToLoad(error: LoadAdError) {
-                                Log.w("AdmobBanner", "⚠️ Banner ad failed: ${error.message}")
+                                Log.e("AdmobBanner", "❌ Banner ad FAILED: code=${error.code} msg=${error.message}")
+                                Log.e("AdmobBanner", "   Domain=${error.domain} | Cause=${error.cause}")
+                            }
+                            override fun onAdImpression() {
+                                Log.d("AdmobBanner", "📊 Banner impression recorded")
                             }
                         }
-                        loadAd(AdRequest.Builder().build())
+                        // Build the ad request — test device config already set globally in SpinWinApp
+                        val adRequest = AdRequest.Builder().build()
+                        Log.d("AdmobBanner", "🔄 Loading banner ad with test ID: $adUnitId")
+                        loadAd(adRequest)
                     }
                 }
             )
