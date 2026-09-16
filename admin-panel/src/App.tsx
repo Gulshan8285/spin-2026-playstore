@@ -3,8 +3,24 @@ import {
   Users, CheckCircle,
   Settings, AlertCircle, Eye, EyeOff, RotateCw, LogOut, ShieldCheck,
   Bell, Send, Edit3, Save,
-  FileText, Gift, RefreshCw, History
+  FileText, Gift, RefreshCw, History, ExternalLink
 } from 'lucide-react';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { 
+  getFirestore, collection, onSnapshot, doc, setDoc 
+} from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBt1gPq8dxTh1xSJkkte3WRtSj_w2y_iNw",
+  authDomain: "spin-game-3f38a.firebaseapp.com",
+  projectId: "spin-game-3f38a",
+  storageBucket: "spin-game-3f38a.firebasestorage.app",
+  messagingSenderId: "888376316097",
+  appId: "1:888376316097:web:spinwin_admin_panel"
+};
+
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app);
 
 interface Withdrawal {
   id: string;
@@ -139,10 +155,16 @@ export default function App() {
   });
 
   const [limitsSaved, setLimitsSaved] = useState(false);
+  const CLOUD_CONFIG_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a0a8c1b20c16f5";
 
   const handleSaveLimits = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('spinwin_financial_config', JSON.stringify(config));
+    // Persist to Firestore
+    try {
+      await setDoc(doc(db, 'config', 'financial'), config, { merge: true });
+    } catch (_) {}
+    // Fallback Relay
     try {
       await fetch(CLOUD_CONFIG_URL, {
         method: 'PUT',
@@ -159,67 +181,127 @@ export default function App() {
   };
 
   // =========================================================================
-  // 👥 4. ZERO-CONFIG LIVE CLOUD RELAY & REAL-TIME LEDGER
+  // 👥 4. OFFICIAL GOOGLE FIRESTORE REAL-TIME SYNC ENGINE
   // =========================================================================
   const CLOUD_USERS_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a0a8c1970616f3";
   const CLOUD_WITHDRAWALS_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a0a8c1a52a16f4";
-  const CLOUD_CONFIG_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a0a8c1b20c16f5";
 
   const [syncState, setSyncState] = useState<'live' | 'syncing' | 'error'>('live');
   const [lastSyncTime, setLastSyncTime] = useState<string>('Just now');
+  const [isFirestoreActive, setIsFirestoreActive] = useState<boolean>(true);
 
   const [users, setUsers] = useState<UserItem[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
 
-  // 🌐 Live Cloud Data Fetcher (Users & Withdrawals)
-  const fetchLiveCloudData = async () => {
+  // 🌐 Manual Refresh fallback (fetches both Firestore snapshot & relay if needed)
+  const refreshLiveLedger = async () => {
+    setSyncState('syncing');
     try {
-      setSyncState('syncing');
-
-      // 1. Fetch Users from Live Cloud Relay
+      // Fetch users from cloud relay as fallback
       const resUsers = await fetch(CLOUD_USERS_URL);
       if (resUsers.ok) {
         const data = await resUsers.json();
         const rawUsers = data?.data?.users;
-        if (Array.isArray(rawUsers)) {
-          const liveUsers: UserItem[] = rawUsers.map((u: any, idx: number) => {
-            const pts = Number(u.walletPoints ?? u.points ?? 0);
-            const bal = Number(u.walletBalance ?? u.balanceRupees ?? (pts / (config.pointsPerRupee || 1000)));
-            const mob = String(u.mobileNumber || u.phone || '—');
-            return {
-              uid: u.uid || `u_${idx + 1}`,
-              name: u.name || 'Player',
-              email: u.email || '—',
-              phone: mob,
-              mobileNumber: mob,
-              upiId: u.upiId || '—',
-              points: pts,
-              walletPoints: pts,
-              walletBalance: bal,
-              totalEarned: Number(u.totalEarned ?? 0),
-              totalWithdrawn: Number(u.totalWithdrawn ?? 0),
-              totalSpins: Number(u.totalSpins ?? 0),
-              tier: (u.tier as any) || 'BRONZE',
-              referrals: Number(u.referrals ?? 0),
-              status: (u.status === 'banned' || u.status === 'BANNED' ? 'BANNED' : 'ACTIVE') as 'ACTIVE' | 'BANNED',
-              deviceModel: u.deviceModel || 'Android Device',
-              registeredDate: u.registeredDate || 'Active Today',
-              lastActive: u.lastActive || 'Active Now 🟢'
-            };
+        if (Array.isArray(rawUsers) && rawUsers.length > 0) {
+          setUsers(prev => {
+            const existingMap = new Map(prev.map(u => [u.uid, u]));
+            rawUsers.forEach((u: any, idx: number) => {
+              const uid = u.uid || `u_${idx + 1}`;
+              const pts = Number(u.walletPoints ?? u.points ?? 0);
+              const bal = Number(u.walletBalance ?? u.balanceRupees ?? (pts / (config.pointsPerRupee || 1000)));
+              const mob = String(u.mobileNumber || u.phone || '—');
+              existingMap.set(uid, {
+                uid,
+                name: u.name || 'Player',
+                email: u.email || '—',
+                phone: mob,
+                mobileNumber: mob,
+                upiId: u.upiId || '—',
+                points: pts,
+                walletPoints: pts,
+                walletBalance: bal,
+                totalEarned: Number(u.totalEarned ?? 0),
+                totalWithdrawn: Number(u.totalWithdrawn ?? 0),
+                totalSpins: Number(u.totalSpins ?? 0),
+                tier: (u.tier as any) || 'BRONZE',
+                referrals: Number(u.referrals ?? 0),
+                status: (u.status === 'banned' || u.status === 'BANNED' ? 'BANNED' : 'ACTIVE') as 'ACTIVE' | 'BANNED',
+                deviceModel: u.deviceModel || 'Android Device',
+                registeredDate: u.registeredDate || 'Active Today',
+                lastActive: u.lastActive || 'Active Now 🟢'
+              });
+            });
+            return Array.from(existingMap.values());
           });
-          setUsers(liveUsers);
         }
       }
+    } catch (_) {}
+    setSyncState('live');
+    setLastSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  };
 
-      // 2. Fetch Withdrawals from Live Cloud Relay
-      const resWds = await fetch(CLOUD_WITHDRAWALS_URL);
-      if (resWds.ok) {
-        const dataWd = await resWds.json();
-        const rawWds = dataWd?.data?.withdrawals;
-        if (Array.isArray(rawWds)) {
-          const liveWds: Withdrawal[] = rawWds.map((w: any) => ({
-            id: w.id || `WD_${Math.random().toString(36).substring(7)}`,
+  // 🔥 1. Real-Time Google Firestore Listeners (Instant Sub-Second Updates, No Quota Limits!)
+  useEffect(() => {
+    let unsubUsers: (() => void) | undefined;
+    let unsubWds: (() => void) | undefined;
+
+    try {
+      setSyncState('syncing');
+
+      // Listen to users collection
+      const usersCol = collection(db, 'users');
+      unsubUsers = onSnapshot(usersCol, (snapshot) => {
+        const liveUsers: UserItem[] = [];
+        snapshot.forEach((docSnap) => {
+          const u = docSnap.data();
+          const pts = Number(u.walletPoints ?? u.points ?? 0);
+          const bal = Number(u.walletBalance ?? u.balanceRupees ?? (pts / (config.pointsPerRupee || 1000)));
+          const mob = String(u.mobileNumber || u.phone || '—');
+          liveUsers.push({
+            uid: docSnap.id || u.uid,
+            name: u.name || 'Player',
+            email: u.email || '—',
+            phone: mob,
+            mobileNumber: mob,
+            upiId: u.upiId || '—',
+            points: pts,
+            walletPoints: pts,
+            walletBalance: bal,
+            totalEarned: Number(u.totalEarned ?? 0),
+            totalWithdrawn: Number(u.totalWithdrawn ?? 0),
+            totalSpins: Number(u.totalSpins ?? 0),
+            tier: (u.tier as any) || 'BRONZE',
+            referrals: Number(u.referrals ?? 0),
+            status: (u.status === 'banned' || u.status === 'BANNED' ? 'BANNED' : 'ACTIVE') as 'ACTIVE' | 'BANNED',
+            deviceModel: u.deviceModel || 'Android Device',
+            registeredDate: u.registeredDate || 'Active Today',
+            lastActive: u.lastActive || 'Active Now 🟢'
+          });
+        });
+
+        if (liveUsers.length > 0) {
+          setUsers(liveUsers);
+        }
+        setSyncState('live');
+        setIsFirestoreActive(true);
+        setLastSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      }, (err) => {
+        console.warn("Firestore users listener notice:", err);
+        if (err.message?.includes('Cloud Firestore API') || err.message?.includes('disabled') || err.code === 'permission-denied' || err.code === 'failed-precondition') {
+          setIsFirestoreActive(false);
+        }
+        setSyncState('error');
+      });
+
+      // Listen to withdrawals collection
+      const wdsCol = collection(db, 'withdrawals');
+      unsubWds = onSnapshot(wdsCol, (snapshot) => {
+        const liveWds: Withdrawal[] = [];
+        snapshot.forEach((docSnap) => {
+          const w = docSnap.data();
+          liveWds.push({
+            id: docSnap.id || w.id,
             userName: w.userName || 'User',
             uid: w.uid || '—',
             amountINR: Number(w.amountINR ?? w.amountRupees ?? 0),
@@ -229,26 +311,24 @@ export default function App() {
             status: w.status || 'pending',
             time: w.time || 'Recent',
             isRealUser: true
-          }));
+          });
+        });
+        if (liveWds.length > 0) {
           setWithdrawals(liveWds);
         }
-      }
+      }, (err) => {
+        console.warn("Firestore withdrawals listener notice:", err);
+      });
 
-      setSyncState('live');
-      setLastSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    } catch (err: any) {
-      console.warn("Live Cloud Sync error:", err);
-      setSyncState('error');
+    } catch (e) {
+      console.warn("Firestore setup error:", e);
+      setIsFirestoreActive(false);
     }
-  };
 
-  // Auto-sync polling every 4 seconds for immediate live data updates
-  useEffect(() => {
-    fetchLiveCloudData();
-    const interval = setInterval(() => {
-      fetchLiveCloudData();
-    }, 4000);
-    return () => clearInterval(interval);
+    return () => {
+      unsubUsers?.();
+      unsubWds?.();
+    };
   }, [config.pointsPerRupee]);
 
   // Selected User for Editing
@@ -302,7 +382,28 @@ export default function App() {
     });
     setUsers(updatedUsers);
 
-    // 2. Persist to Live Cloud Relay
+    // 2. Persist to Google Cloud Firestore (Primary)
+    try {
+      await setDoc(doc(db, 'users', editingUser.uid), {
+        uid: editingUser.uid,
+        name: editingUser.name,
+        email: editingUser.email,
+        phone: editPhoneInput.trim(),
+        mobileNumber: editPhoneInput.trim(),
+        upiId: editUpiInput.trim(),
+        points: newPts,
+        walletPoints: newPts,
+        walletBalance: newBal,
+        balanceRupees: newBal,
+        status: editStatusInput,
+        lastActive: 'Updated by Admin ⚡',
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (err) {
+      console.warn("Firestore user save notice:", err);
+    }
+
+    // 3. Persist to Live Cloud Relay (Fallback)
     try {
       await fetch(CLOUD_USERS_URL, {
         method: 'PUT',
@@ -316,7 +417,7 @@ export default function App() {
       console.warn("Cloud relay save error:", err);
     }
 
-    // 3. Immutable Audit Trail
+    // 4. Immutable Audit Trail
     const newLog: AuditLogItem = {
       logId: 'log_' + Date.now(),
       adminUid: 'admin_master',
@@ -343,6 +444,17 @@ export default function App() {
     const updated = withdrawals.map(w => w.id === id ? { ...w, status: 'approved' as const } : w);
     setWithdrawals(updated);
 
+    // Persist to Google Firestore (Primary)
+    try {
+      await setDoc(doc(db, 'withdrawals', id), {
+        status: 'approved',
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (err) {
+      console.warn("Firestore approve notice:", err);
+    }
+
+    // Fallback Relay
     try {
       await fetch(CLOUD_WITHDRAWALS_URL, {
         method: 'PUT',
@@ -362,6 +474,16 @@ export default function App() {
     const updated = withdrawals.map(w => w.id === id ? { ...w, status: 'rejected' as const } : w);
     setWithdrawals(updated);
 
+    // Persist rejection to Firestore
+    try {
+      await setDoc(doc(db, 'withdrawals', id), {
+        status: 'rejected',
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (err) {
+      console.warn("Firestore reject notice:", err);
+    }
+
     if (wd) {
       const updatedUsers = users.map(u => {
         if (u.uid === wd.uid) {
@@ -377,6 +499,19 @@ export default function App() {
         return u;
       });
       setUsers(updatedUsers);
+
+      const targetUser = updatedUsers.find(u => u.uid === wd.uid);
+      if (targetUser) {
+        try {
+          await setDoc(doc(db, 'users', targetUser.uid), {
+            points: targetUser.walletPoints,
+            walletPoints: targetUser.walletPoints,
+            walletBalance: targetUser.walletBalance,
+            balanceRupees: targetUser.walletBalance,
+            updatedAt: Date.now()
+          }, { merge: true });
+        } catch (_) {}
+      }
 
       try {
         await fetch(CLOUD_USERS_URL, {
@@ -835,30 +970,30 @@ export default function App() {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            background: syncState === 'error' ? 'rgba(255, 77, 77, 0.15)' : 'rgba(0, 230, 118, 0.12)',
-            border: `1px solid ${syncState === 'error' ? 'rgba(255, 77, 77, 0.4)' : 'rgba(0, 230, 118, 0.3)'}`,
+            background: !isFirestoreActive ? 'rgba(255, 171, 0, 0.15)' : syncState === 'error' ? 'rgba(255, 77, 77, 0.15)' : 'rgba(0, 230, 118, 0.12)',
+            border: `1px solid ${!isFirestoreActive ? 'rgba(255, 171, 0, 0.4)' : syncState === 'error' ? 'rgba(255, 77, 77, 0.4)' : 'rgba(0, 230, 118, 0.3)'}`,
             padding: '6px 14px',
             borderRadius: '20px',
             fontSize: '12px',
-            color: syncState === 'error' ? '#FF6B6B' : '#00E676',
+            color: !isFirestoreActive ? '#FFB300' : syncState === 'error' ? '#FF6B6B' : '#00E676',
             fontWeight: 700
           }}>
             <span style={{
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              background: syncState === 'syncing' ? '#FFC542' : syncState === 'error' ? '#FF4D4D' : '#00E676',
-              boxShadow: `0 0 8px ${syncState === 'error' ? '#FF4D4D' : '#00E676'}`,
+              background: !isFirestoreActive ? '#FFB300' : syncState === 'syncing' ? '#FFC542' : syncState === 'error' ? '#FF4D4D' : '#00E676',
+              boxShadow: `0 0 8px ${!isFirestoreActive ? '#FFB300' : syncState === 'error' ? '#FF4D4D' : '#00E676'}`,
               display: 'inline-block'
             }}></span>
-            <span>{syncState === 'syncing' ? 'Syncing...' : 'LIVE CLOUD ACTIVE'} ({lastSyncTime})</span>
+            <span>{!isFirestoreActive ? 'FIRESTORE SETUP PENDING' : syncState === 'syncing' ? 'Syncing...' : 'FIRESTORE LIVE'} ({lastSyncTime})</span>
             <button
-              onClick={() => { fetchLiveCloudData(); showNotice('🔄 Cloud relay force synchronized!'); }}
+              onClick={() => { refreshLiveLedger(); showNotice('🔄 Cloud ledger force refreshed!'); }}
               title="Force sync data now"
               style={{
                 background: 'none',
                 border: 'none',
-                color: syncState === 'error' ? '#FF6B6B' : '#00E676',
+                color: !isFirestoreActive ? '#FFB300' : syncState === 'error' ? '#FF6B6B' : '#00E676',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -904,6 +1039,75 @@ export default function App() {
 
       {/* DASHBOARD CONTAINER */}
       <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '24px' }}>
+        {/* 🔥 FIRESTORE ACTIVATION BANNER */}
+        {!isFirestoreActive && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(255, 152, 0, 0.15), rgba(244, 67, 54, 0.15))',
+            border: '1px solid rgba(255, 152, 0, 0.5)',
+            borderRadius: '16px',
+            padding: '20px 24px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '16px',
+            boxShadow: '0 8px 30px rgba(255, 152, 0, 0.12)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', maxWidth: '850px' }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '12px',
+                background: 'rgba(255, 152, 0, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '24px',
+                flexShrink: 0
+              }}>
+                🔥
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, color: '#FFB74D', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>Google Cloud Firestore Database Setup Required</span>
+                  <span style={{ fontSize: '10px', background: 'rgba(255, 152, 0, 0.2)', padding: '2px 8px', borderRadius: '4px', color: '#FFD54F' }}>
+                    10 Seconds One-Time Setup
+                  </span>
+                </div>
+                <div style={{ color: '#E0E0E0', fontSize: '13px', marginTop: '4px', lineHeight: '1.5' }}>
+                  Aapke Firebase project (<b>spin-game-3f38a</b>) me Cloud Firestore database abhi create nahi hua hai. 
+                  Neeche diye gaye button par click karein: <b>"Create database"</b> par click karein → <b>"Start in test mode"</b> chunein → <b>"Create"</b> dabayein. 
+                  Iske baad har user ka login, email, mobile, UPI aur balance live aayega!
+                </div>
+              </div>
+            </div>
+
+            <a
+              href="https://console.firebase.google.com/project/spin-game-3f38a/firestore"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'linear-gradient(135deg, #FF9800, #F44336)',
+                color: '#fff',
+                padding: '12px 24px',
+                borderRadius: '10px',
+                fontWeight: 800,
+                fontSize: '14px',
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 4px 20px rgba(244, 67, 54, 0.4)',
+                cursor: 'pointer'
+              }}
+            >
+              <ExternalLink size={16} />
+              Open Firebase Console & Activate ⚡
+            </a>
+          </div>
+        )}
         {/* STATS OVERVIEW CARDS (ALL IN RUPEES ₹) */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '24px' }}>
           <div className="glass-card" style={{ padding: '20px', borderRadius: '16px', background: '#131B2E', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -1123,7 +1327,7 @@ export default function App() {
               </div>
 
               <button
-                onClick={() => { fetchLiveCloudData(); showNotice('🔄 User data synced with Live Cloud Relay!'); }}
+                onClick={() => { refreshLiveLedger(); showNotice('🔄 User data synced with Live Firestore!'); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px',
                   background: 'rgba(0, 209, 255, 0.15)', border: '1px solid rgba(0, 209, 255, 0.4)',

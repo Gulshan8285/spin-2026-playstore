@@ -2,6 +2,8 @@ package com.spinwin.rewards.data.remote
 
 import android.os.Build
 import android.util.Log
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.spinwin.rewards.data.model.UserProfile
 import com.spinwin.rewards.data.model.WithdrawalRequest
 import kotlinx.coroutines.CoroutineScope
@@ -21,19 +23,19 @@ import java.util.UUID
 
 /**
  * FirestoreSyncManager:
- * Dual-Channel Live Synchronizer for SpinWin Rewards.
+ * Enterprise Dual-Channel Live Synchronizer for SpinWin Rewards.
  * Syncs user profile, live points, earnings, and withdrawal requests to:
- * 1. Global Live Cloud Relay (https://api.restful-api.dev) for INSTANT real-time updates in Web Admin Panel.
- * 2. Google Cloud Firestore in the "spin-game-3f38a" project as persistent database.
+ * 1. Official Google Firebase Firestore in the "spin-game-3f38a" project as real-time database.
+ * 2. Global Live Cloud Relay as secondary zero-config relay.
  */
 object FirestoreSyncManager {
     private const val TAG = "FirestoreSync"
 
-    // 🌐 Channel 1: Live Cloud Relay (Instant Zero-Config Realtime Sync for Admin Panel)
+    // 🌐 Channel 1: Live Cloud Relay (Fallback)
     private const val CLOUD_USERS_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a0a8c1970616f3"
     private const val CLOUD_WITHDRAWALS_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a0a8c1a52a16f4"
 
-    // 🔥 Channel 2: Google Cloud Firestore REST API
+    // 🔥 Channel 2: Google Cloud Firestore REST API & SDK
     private const val PROJECT_ID = "spin-game-3f38a"
     private const val API_KEY = "AIzaSyBt1gPq8dxTh1xSJkkte3WRtSj_w2y_iNw"
     private const val FIRESTORE_BASE_URL = "https://firestore.googleapis.com/v1/projects/$PROJECT_ID/databases/(default)/documents"
@@ -54,19 +56,22 @@ object FirestoreSyncManager {
             "u_dev_" + UUID.randomUUID().toString().take(8)
         }
 
+        // 1. Primary: Direct Google Firestore SDK Sync (Instant, Realtime, Persistent)
+        syncUserToFirestoreSDK(user, stableUid)
+
         scope.launch {
-            // 1. Sync to Global Live Cloud Relay
+            // 2. Secondary Sync to Firestore REST API (as backup)
+            try {
+                syncUserToFirestore(user, stableUid)
+            } catch (e: Exception) {
+                Log.w(TAG, "Firestore secondary REST sync skipped: ${e.message}")
+            }
+
+            // 3. Fallback Sync to Cloud Relay
             try {
                 syncUserToCloudRelay(user, stableUid)
             } catch (e: Exception) {
                 Log.w(TAG, "Cloud relay user sync warning: ${e.message}")
-            }
-
-            // 2. Secondary Sync to Firestore
-            try {
-                syncUserToFirestore(user, stableUid)
-            } catch (e: Exception) {
-                Log.w(TAG, "Firestore secondary sync skipped: ${e.message}")
             }
         }
     }
@@ -205,17 +210,104 @@ object FirestoreSyncManager {
     }
 
     /**
+     * 🔥 Direct Google Cloud Firestore SDK Synchronization for User Profile.
+     * Uses official FirebaseFirestore instance with offline persistence and automatic retries.
+     */
+    private fun syncUserToFirestoreSDK(user: UserProfile, uid: String) {
+        try {
+            val firestore = FirebaseFirestore.getInstance()
+            val deviceName = "${Build.MANUFACTURER.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }} ${Build.MODEL}"
+            val nowFormatted = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date())
+
+            val userMap = hashMapOf(
+                "uid" to uid,
+                "name" to user.name.ifBlank { "Player" },
+                "email" to user.email,
+                "phone" to user.mobileNumber.ifBlank { user.phone },
+                "mobileNumber" to user.mobileNumber.ifBlank { user.phone },
+                "upiId" to user.upiId,
+                "points" to user.walletPoints,
+                "walletPoints" to user.walletPoints,
+                "balanceRupees" to user.walletBalance,
+                "walletBalance" to user.walletBalance,
+                "tier" to user.tier.name,
+                "status" to user.status,
+                "deviceModel" to deviceName,
+                "registeredDate" to nowFormatted,
+                "lastActive" to "Active Now 🟢",
+                "totalSpins" to user.totalSpins,
+                "totalEarned" to user.totalEarned,
+                "totalWithdrawn" to user.totalWithdrawn,
+                "age" to user.age,
+                "countryCode" to user.countryCode,
+                "updatedAt" to System.currentTimeMillis()
+            )
+
+            val docId = sanitizeDocId(uid)
+            firestore.collection("users").document(docId)
+                .set(userMap, SetOptions.merge())
+                .addOnSuccessListener {
+                    Log.d(TAG, "User $docId synced to Firestore successfully")
+                }
+                .addOnFailureListener { e ->
+                    Log.w(TAG, "User $docId sync to Firestore failed: ${e.message}")
+                }
+        } catch (e: Exception) {
+            Log.w(TAG, "Firestore SDK user sync exception: ${e.message}")
+        }
+    }
+
+    /**
      * Syncs a withdrawal request to Live Cloud & Firestore
      */
     fun syncWithdrawal(request: WithdrawalRequest, userName: String) {
         if (request.wdId.isBlank()) return
 
+        // 1. Primary: Direct Google Firestore SDK Sync
+        syncWithdrawalToFirestoreSDK(request, userName)
+
+        // 2. Secondary: Cloud Relay Sync
         scope.launch {
             try {
                 syncWithdrawalToCloudRelay(request, userName)
             } catch (e: Exception) {
                 Log.w(TAG, "Cloud relay withdrawal sync warning: ${e.message}")
             }
+        }
+    }
+
+    /**
+     * 🔥 Direct Google Cloud Firestore SDK Synchronization for Withdrawals
+     */
+    private fun syncWithdrawalToFirestoreSDK(request: WithdrawalRequest, userName: String) {
+        try {
+            val firestore = FirebaseFirestore.getInstance()
+            val nowFormatted = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(request.requestedAt))
+
+            val wdMap = hashMapOf(
+                "id" to request.wdId,
+                "uid" to request.uid,
+                "userName" to userName,
+                "amountINR" to request.amountRupees,
+                "pointsDeducted" to request.pointsDeducted,
+                "method" to request.method,
+                "upiId" to request.payoutAddress,
+                "status" to request.status,
+                "time" to nowFormatted,
+                "isRealUser" to true,
+                "timestamp" to request.requestedAt
+            )
+
+            firestore.collection("withdrawals").document(request.wdId)
+                .set(wdMap, SetOptions.merge())
+                .addOnSuccessListener {
+                    Log.d(TAG, "Withdrawal ${request.wdId} synced to Firestore successfully")
+                }
+                .addOnFailureListener { e ->
+                    Log.w(TAG, "Withdrawal ${request.wdId} sync failed: ${e.message}")
+                }
+        } catch (e: Exception) {
+            Log.w(TAG, "Firestore SDK withdrawal sync exception: ${e.message}")
         }
     }
 
