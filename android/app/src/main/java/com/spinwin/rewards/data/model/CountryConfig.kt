@@ -12,7 +12,7 @@ data class CountryInfo(
     val flag: String,           // Emoji flag
     val currencyCode: String,   // Currency 3-letter code (e.g., "USD", "GBP", "INR")
     val currencySymbol: String, // Currency symbol (e.g., "$", "£", "₹")
-    val pointsPerUnit: Int = 1000 // 1,000 points = 1.00 USD / GBP / EUR / 10 INR
+    val pointsPerUnit: Int = 1000 // 1,000 points = 1.00 USD / GBP / EUR / 1.00 INR (100 pts = 10 paise = ₹0.10)
 )
 
 object CountryRegistry {
@@ -23,7 +23,7 @@ object CountryRegistry {
     val DE = CountryInfo("DE", "Germany", "+49", "🇩🇪", "EUR", "€", 1100)
     val FR = CountryInfo("FR", "France", "+33", "🇫🇷", "EUR", "€", 1100)
     val AE = CountryInfo("AE", "United Arab Emirates", "+971", "🇦🇪", "AED", "AED", 300)
-    val IN = CountryInfo("IN", "India", "+91", "🇮🇳", "INR", "₹", 100)
+    val IN = CountryInfo("IN", "India", "+91", "🇮🇳", "INR", "₹", 1000)
     val SG = CountryInfo("SG", "Singapore", "+65", "🇸🇬", "SGD", "S$", 1000)
     val JP = CountryInfo("JP", "Japan", "+81", "🇯🇵", "JPY", "¥", 10)
     val BR = CountryInfo("BR", "Brazil", "+55", "🇧🇷", "BRL", "R$", 200)
