@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_primary">#070B14</color>
+    <color name="bg_secondary">#0F1626</color>
+    <color name="coral_red">#FF3D71</color>
+    <color name="electric_cyan">#00D1FF</color>
+    <color name="emerald">#00E676</color>
+    <color name="gold">#FFC542</color>
+    <color name="neon_purple">#7C4DFF</color>
+    <string name="app_name">SpinWin Rewards</string>
+    <string name="default_web_client_id" translatable="false">888376316097-pmkdrr33k6pdligd54gfavlqu9k93han.apps.googleusercontent.com</string>
+    <string name="gcm_defaultSenderId" translatable="false">888376316097</string>
+    <string name="google_api_key" translatable="false">AIzaSyBt1gPq8dxTh1xSJkkte3WRtSj_w2y_iNw</string>
+    <string name="google_app_id" translatable="false">1:888376316097:android:f2ea36e3465197cec14440</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyBt1gPq8dxTh1xSJkkte3WRtSj_w2y_iNw</string>
+    <string name="google_storage_bucket" translatable="false">spin-game-3f38a.firebasestorage.app</string>
+    <string name="project_id" translatable="false">spin-game-3f38a</string>
+    <string name="tagline">Turn Daily Spins into Instant Cash Rewards</string>
+    <style name="Theme.SpinWinRewards" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/bg_primary</item>
+        <item name="android:navigationBarColor">@color/bg_primary</item>
+        <item name="android:windowBackground">@color/bg_primary</item>
+    </style>
+</resources>

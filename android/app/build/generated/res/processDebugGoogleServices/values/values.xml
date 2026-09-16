@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="default_web_client_id" translatable="false">888376316097-pmkdrr33k6pdligd54gfavlqu9k93han.apps.googleusercontent.com</string>
+    <string name="gcm_defaultSenderId" translatable="false">888376316097</string>
+    <string name="google_api_key" translatable="false">AIzaSyBt1gPq8dxTh1xSJkkte3WRtSj_w2y_iNw</string>
+    <string name="google_app_id" translatable="false">1:888376316097:android:f2ea36e3465197cec14440</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyBt1gPq8dxTh1xSJkkte3WRtSj_w2y_iNw</string>
+    <string name="google_storage_bucket" translatable="false">spin-game-3f38a.firebasestorage.app</string>
+    <string name="project_id" translatable="false">spin-game-3f38a</string>
+</resources>
