@@ -100,6 +100,17 @@ fun HomeScreen(
         mutableStateOf(prefs.getBoolean("has_seen_how_to_play", false).not())
     }
 
+    // ✅ Check if user already claimed today (midnight boundary)
+    val hasClaimedToday = remember(userProfile.lastLoginClaim) {
+        val todayStart = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        userProfile.lastLoginClaim >= todayStart
+    }
+
     AuroraBackground(modifier = modifier) {
         LazyColumn(
             modifier = Modifier
@@ -213,10 +224,15 @@ fun HomeScreen(
             item {
                 DailyCheckInCard(
                     streakDays = userProfile.streakDays,
+                    hasClaimedToday = hasClaimedToday,
                     onClaimClick = {
-                        viewModel.claimDailyCheckIn { bonus ->
-                            soundManager.playBigWin()
-                            Toast.makeText(context, "Day ${userProfile.streakDays} Bonus Claimed: +$bonus Points!", Toast.LENGTH_SHORT).show()
+                        viewModel.claimDailyCheckIn { bonus, claimed ->
+                            if (claimed) {
+                                soundManager.playBigWin()
+                                Toast.makeText(context, "🔥 Day ${userProfile.streakDays} Bonus Claimed: +$bonus Points!", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "⏰ Aaj ka bonus pehle se le liya hai! Kal midnight ke baad wapas aao.", Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
                 )
@@ -915,7 +931,11 @@ private fun TodaysEarningsCard(earnedToday: Int, dailyGoal: Int) {
 }
 
 @Composable
-private fun DailyCheckInCard(streakDays: Int, onClaimClick: () -> Unit) {
+private fun DailyCheckInCard(
+    streakDays: Int,
+    hasClaimedToday: Boolean,
+    onClaimClick: () -> Unit
+) {
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(
@@ -930,13 +950,24 @@ private fun DailyCheckInCard(streakDays: Int, onClaimClick: () -> Unit) {
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
-                Text(
-                    text = "Day $streakDays Active 🔥",
-                    color = Gold,
-                    fontFamily = InterFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp
-                )
+                // Status badge: Claimed vs Active
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (hasClaimedToday) Emerald.copy(alpha = 0.15f)
+                            else Gold.copy(alpha = 0.15f)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = if (hasClaimedToday) "✅ Aaj Claimed" else "Day $streakDays Active 🔥",
+                        color = if (hasClaimedToday) Emerald else Gold,
+                        fontFamily = InterFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -945,8 +976,8 @@ private fun DailyCheckInCard(streakDays: Int, onClaimClick: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 for (day in 1..7) {
-                    val isCompleted = day < streakDays
-                    val isCurrent = day == streakDays
+                    val isCompleted = day < streakDays || (day == streakDays && hasClaimedToday)
+                    val isCurrent = day == streakDays && !hasClaimedToday
                     Box(
                         modifier = Modifier
                             .size(33.dp)
@@ -957,7 +988,7 @@ private fun DailyCheckInCard(streakDays: Int, onClaimClick: () -> Unit) {
                                         .background(GoldGradient)
                                         .border(2.dp, Color.White, CircleShape)
                                         .clickable(onClick = onClaimClick)
-                                    isCompleted -> Modifier.background(Emerald.copy(alpha = 0.3f))
+                                    isCompleted -> Modifier.background(Emerald.copy(alpha = 0.35f))
                                     else -> Modifier.background(Color.White.copy(alpha = 0.06f))
                                 }
                             ),
@@ -972,6 +1003,19 @@ private fun DailyCheckInCard(streakDays: Int, onClaimClick: () -> Unit) {
                         )
                     }
                 }
+            }
+
+            // "Already Claimed" hint row
+            if (hasClaimedToday) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "⏰ Kal midnight ke baad Day ${if (streakDays >= 7) 1 else streakDays + 1} bonus claim karo!",
+                    color = TextSecondary,
+                    fontFamily = InterFamily,
+                    fontSize = 11.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }

@@ -27,12 +27,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val activeCountry: StateFlow<com.spinwin.rewards.data.model.CountryInfo> = repository.activeCountry
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.spinwin.rewards.data.model.CountryRegistry.DEFAULT)
 
-    fun claimDailyCheckIn(onClaimed: (Int) -> Unit) {
+    fun claimDailyCheckIn(onClaimed: (Int, Boolean) -> Unit) {
         viewModelScope.launch {
             val currentStreak = userProfile.value.streakDays
             val points = currentStreak * 10
-            repository.claimDailyCheckIn()
-            onClaimed(points)
+            val claimed = repository.claimDailyCheckIn()
+            onClaimed(points, claimed)
         }
     }
 

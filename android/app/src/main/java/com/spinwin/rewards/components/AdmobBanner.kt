@@ -1,5 +1,8 @@
 package com.spinwin.rewards.components
 
+import android.app.Activity
+import android.content.Context
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -18,22 +21,55 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import com.spinwin.rewards.theme.BorderGlass
 import com.spinwin.rewards.theme.InterFamily
 
 /**
+ * Google AdMob Ad Units for SpinWin Rewards
+ *
+ * TEST IDs (used while app is in development / not yet approved by AdMob):
+ *   Banner:        ca-app-pub-3940256099942544/6300978111
+ *   Interstitial:  ca-app-pub-3940256099942544/1033173712
+ *   Rewarded:      ca-app-pub-3940256099942544/5224354917
+ *   App Open:      ca-app-pub-3940256099942544/9257395921
+ *
+ * When your real AdMob unit IDs are ready, replace TEST_ constants with real IDs.
+ */
+object AdUnitIds {
+    // ✅ Official Google Test Ad IDs (safe to use during testing — no policy violations)
+    const val BANNER_TEST      = "ca-app-pub-3940256099942544/6300978111"
+    const val INTERSTITIAL_TEST = "ca-app-pub-3940256099942544/1033173712"
+    const val REWARDED_TEST    = "ca-app-pub-3940256099942544/5224354917"
+    const val APP_OPEN_TEST    = "ca-app-pub-3940256099942544/9257395921"
+
+    // 🔄 Replace below with your REAL AdMob unit IDs from admob.google.com when ready:
+    // const val BANNER_REAL   = "ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX"
+    // const val REWARDED_REAL = "ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX"
+
+    // Currently active (set to TEST while building, switch to REAL for release)
+    val BANNER      get() = BANNER_TEST
+    val REWARDED    get() = REWARDED_TEST
+    val INTERSTITIAL get() = INTERSTITIAL_TEST
+}
+
+/**
  * Unrewarded AdMob Banner Ad:
- * Shows a standard 320x50 banner ad.
- * The user receives NO points/cash for this ad.
- * 100% of the revenue goes directly to the developer!
+ * Shows a standard 320x50 banner.
+ * Developer earns 100% revenue — user gets no points from this.
  */
 @Composable
 fun AdmobBanner(
     modifier: Modifier = Modifier,
-    adUnitId: String = "ca-app-pub-3940256099942544/6300978111" // Google Official Sample Banner ID
+    adUnitId: String = AdUnitIds.BANNER
 ) {
     Box(
         modifier = modifier
@@ -63,10 +99,87 @@ fun AdmobBanner(
                     AdView(context).apply {
                         setAdSize(AdSize.BANNER)
                         this.adUnitId = adUnitId
+                        adListener = object : AdListener() {
+                            override fun onAdLoaded() {
+                                Log.d("AdmobBanner", "✅ Banner ad loaded successfully")
+                            }
+                            override fun onAdFailedToLoad(error: LoadAdError) {
+                                Log.w("AdmobBanner", "⚠️ Banner ad failed: ${error.message}")
+                            }
+                        }
                         loadAd(AdRequest.Builder().build())
                     }
                 }
             )
         }
     }
+}
+
+/**
+ * Load and show a Rewarded Ad.
+ * Call this when user taps "Watch Ad for Points".
+ * onRewarded() is called only if user watches the full ad.
+ */
+fun loadAndShowRewardedAd(
+    context: Context,
+    onRewarded: () -> Unit,
+    onFailed: () -> Unit = {}
+) {
+    val adRequest = AdRequest.Builder().build()
+    RewardedAd.load(
+        context,
+        AdUnitIds.REWARDED,
+        adRequest,
+        object : RewardedAdLoadCallback() {
+            override fun onAdLoaded(rewardedAd: RewardedAd) {
+                Log.d("RewardedAd", "✅ Rewarded ad loaded")
+                val activity = context as? Activity
+                if (activity != null) {
+                    rewardedAd.show(activity) { _ ->
+                        Log.d("RewardedAd", "✅ User earned reward!")
+                        onRewarded()
+                    }
+                } else {
+                    onFailed()
+                }
+            }
+            override fun onAdFailedToLoad(error: LoadAdError) {
+                Log.w("RewardedAd", "⚠️ Rewarded ad failed to load: ${error.message}")
+                onFailed()
+            }
+        }
+    )
+}
+
+/**
+ * Load and show an Interstitial Ad.
+ * Call this between screens or after completing tasks.
+ */
+fun loadAndShowInterstitialAd(
+    context: Context,
+    onDismissed: () -> Unit = {}
+) {
+    val adRequest = AdRequest.Builder().build()
+    InterstitialAd.load(
+        context,
+        AdUnitIds.INTERSTITIAL,
+        adRequest,
+        object : InterstitialAdLoadCallback() {
+            override fun onAdLoaded(interstitialAd: InterstitialAd) {
+                Log.d("InterstitialAd", "✅ Interstitial ad loaded")
+                interstitialAd.fullScreenContentCallback = object : com.google.android.gms.ads.FullScreenContentCallback() {
+                    override fun onAdDismissedFullScreenContent() {
+                        Log.d("InterstitialAd", "Ad dismissed")
+                        onDismissed()
+                    }
+                }
+                val activity = context as? Activity
+                activity?.let { interstitialAd.show(it) } ?: onDismissed()
+            }
+            override fun onAdFailedToLoad(error: LoadAdError) {
+                Log.w("InterstitialAd", "⚠️ Interstitial failed: ${error.message}")
+                onDismissed()
+            }
+        }
+    )
 }

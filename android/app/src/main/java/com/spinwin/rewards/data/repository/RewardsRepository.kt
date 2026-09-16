@@ -389,12 +389,32 @@ class RewardsRepository(private val context: Context) {
 
     fun claimDailyCheckIn(): Boolean {
         val current = _userProfile.value
+
+        // ✅ 1-per-day check: compare calendar date of lastLoginClaim vs today
+        val lastClaimMs = current.lastLoginClaim
+        val todayStart = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        if (lastClaimMs >= todayStart) {
+            // Already claimed today — block it
+            android.util.Log.d("RewardsRepo", "Daily claim already done today. Next claim after midnight.")
+            return false
+        }
+
+        // Claim allowed: credit points and advance streak
         val bonus = current.streakDays * 10
+        val nextStreak = if (current.streakDays >= 7) 1 else current.streakDays + 1 // Reset after day 7
         val updated = current.copy(
-            streakDays = current.streakDays + 1,
+            streakDays = nextStreak,
             lastLoginClaim = System.currentTimeMillis()
         )
         _userProfile.value = updated
+        cacheManager.saveUserProfile(updated)
+        FirestoreSyncManager.syncUser(updated)
         creditPoints(bonus, "Daily Check-In Day ${current.streakDays} Bonus", "🔥", "bonus", bonus * 0.001)
         return true
     }
