@@ -87,6 +87,8 @@ class RewardsRepository(private val context: Context) {
             _activeCountry.value = CountryRegistry.findByCode(cached.countryCode)
             _transactions.value = cacheManager.getCachedTransactions(activeEmail)
             attachFirestoreListeners(cached.uid)
+            FirestoreSyncManager.syncUser(cached)
+            pullRemoteUpdates(cached.uid)
         } else {
             val detected = CountryRegistry.detectDefaultCountry()
             _userProfile.value = _userProfile.value.copy(countryCode = detected.code)
@@ -96,10 +98,36 @@ class RewardsRepository(private val context: Context) {
     }
 
     /**
+     * Pulls latest wallet points, balance, and status from Live Cloud Relay
+     */
+    fun pullRemoteUpdates(uid: String) {
+        if (uid.isBlank() || uid == "user_new") return
+        FirestoreSyncManager.fetchUserFromCloudRelay(uid) { userJson ->
+            if (userJson != null) {
+                val cur = _userProfile.value
+                val pts = userJson.optInt("points", userJson.optInt("walletPoints", cur.walletPoints))
+                val bal = userJson.optDouble("balanceRupees", userJson.optDouble("walletBalance", cur.walletBalance))
+                val status = userJson.optString("status", cur.status)
+                val upi = userJson.optString("upiId", cur.upiId)
+                val updated = cur.copy(
+                    walletPoints = pts,
+                    walletBalance = bal,
+                    status = if (status.isNotBlank()) status else cur.status,
+                    upiId = if (upi.isNotBlank()) upi else cur.upiId
+                )
+                _userProfile.value = updated
+                cacheManager.saveUserProfile(updated)
+            }
+        }
+    }
+
+    /**
      * Attaches Realtime Snapshot Listeners on Firestore users/{uid} and transactions
      */
     fun attachFirestoreListeners(uid: String) {
         if (uid.isBlank() || uid == "user_new") return
+
+        pullRemoteUpdates(uid)
 
         // Clean up previous listeners
         userDocListener?.remove()
